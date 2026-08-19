@@ -4,4 +4,4 @@ python-multipart
 streamlit
 requests
 ollama
-python-doctr
+python-doctr[viz]
