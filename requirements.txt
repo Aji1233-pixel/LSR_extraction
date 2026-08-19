@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-python-multipart
-streamlit
-requests
-ollama
-python-doctr
