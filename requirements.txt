@@ -5,3 +5,4 @@ streamlit
 requests
 ollama
 python-doctr[viz]
+pydantic
