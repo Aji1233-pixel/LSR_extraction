@@ -2,10 +2,11 @@ from fastapi import APIRouter, HTTPException, UploadFile
 import time
 
 from core.extraction.doctr_engine import DocTREngine
-from core.llm.ollama_client import OllamaClient
+from core.llm.freellm_client import FreeLLMClient
 from core.llm.field_extractor import FieldExtractor
 from core.llm.document_extractor import DocumentExtractor
 from core.validation.validator import DocumentValidator
+from core.translation.translator import TamilTranslator
 
 
 router = APIRouter(
@@ -20,15 +21,17 @@ router = APIRouter(
 
 doctr_engine = DocTREngine()
 
-ollama_client = OllamaClient()
+freellm_client = FreeLLMClient()
 
-field_extractor = FieldExtractor()
+field_extractor = FieldExtractor(freellm_client)
 
 document_extractor = DocumentExtractor(
-    ollama_client
+    freellm_client
 )
 
 validator = DocumentValidator()
+
+tamil_translator = TamilTranslator()
 
 @router.post("/extract")
 def extract_document(file: UploadFile):
@@ -105,6 +108,36 @@ def extract_document(file: UploadFile):
         )
 
         # ====================================================
+        # TAMIL TRANSLATION (Skip dates, numbers, IDs)
+        # ====================================================
+
+        translated_fields = {}
+        translation_start = time.perf_counter()
+
+        # Fields that should NOT be translated (dates, IDs, numbers)
+        NO_TRANSLATE_FIELDS = {
+            "lsr_date",
+            "application_number",
+        }
+
+        try:
+            for key, value in final_result.items():
+                if value and isinstance(value, str) and value.strip():
+                    # Skip translation for dates and numbers
+                    if key in NO_TRANSLATE_FIELDS:
+                        translated_fields[key] = value
+                    else:
+                        translated_fields[key] = tamil_translator.translate(value)
+                else:
+                    translated_fields[key] = None
+        except Exception as exc:
+            print(f"⚠️ Translation failed: {exc}")
+            translated_fields = {key: None for key in final_result.keys()}
+
+        translation_time = time.perf_counter() - translation_start
+        print(f"⏱️ Tamil translation: {translation_time:.2f} seconds")
+
+        # ====================================================
         # TOTAL PROCESSING TIME
         # ====================================================
 
@@ -132,6 +165,8 @@ def extract_document(file: UploadFile):
             "filename": file.filename,
 
             "extracted_fields": final_result,
+
+            "translated_fields": translated_fields,
 
             "documents_prior_to_disbursal":
                 document_data[
