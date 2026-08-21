@@ -1,6 +1,24 @@
+from io import BytesIO
 from pathlib import Path
+import textwrap
+
 import requests
 import streamlit as st
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
+from reportlab.platypus import (
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
 
 # ============================================================
 # CONFIGURATION
@@ -12,501 +30,1332 @@ st.set_page_config(
     page_title="LSR Document Intelligence",
     page_icon="📄",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
+
 
 # ============================================================
 # CUSTOM CSS
 # ============================================================
 
-CUSTOM_CSS = """
-<style>
-/* ---------- Global ---------- */
-.stApp {
-    background: #f5f8fc;
-}
-.main .block-container {
-    max-width: 1250px;
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-}
+CUSTOM_CSS = textwrap.dedent(
+    """
+    <style>
 
-/* ---------- Sidebar ---------- */
-section[data-testid="stSidebar"] {
-    background: #ffffff;
-    border-right: 1px solid #e5eaf0;
-}
-section[data-testid="stSidebar"] > div {
-    padding-top: 2rem;
-}
-.sidebar-logo {
-    text-align: center;
-    padding: 10px 0 25px 0;
-}
-.sidebar-icon {
-    width: 58px;
-    height: 58px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #2563eb, #0ea5e9);
-    color: white;
-    font-size: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: auto;
-    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.20);
-}
-.sidebar-title {
-    font-size: 20px;
-    font-weight: 700;
-    color: #172033;
-    margin-top: 12px;
-}
-.sidebar-subtitle {
-    color: #7b8798;
-    font-size: 12px;
-    margin-top: 4px;
-}
+    .stApp {
+        background-color: #f8fafc;
+    }
 
-/* ---------- Hero ---------- */
-.hero {
-    background: linear-gradient(135deg, #eff6ff 0%, #ffffff 55%, #ecfeff 100%);
-    border: 1px solid #dbeafe;
-    border-radius: 24px;
-    padding: 38px 42px;
-    margin-bottom: 25px;
-    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04);
-}
-.hero-badge {
-    display: inline-block;
-    background: #dbeafe;
-    color: #1d4ed8;
-    padding: 6px 12px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-    margin-bottom: 15px;
-}
-.hero-title {
-    font-size: 38px;
-    line-height: 1.15;
-    font-weight: 800;
-    color: #172033;
-    margin: 0;
-}
-.hero-title span {
-    color: #2563eb;
-}
-.hero-description {
-    color: #64748b;
-    font-size: 16px;
-    line-height: 1.7;
-    max-width: 760px;
-    margin-top: 14px;
-}
+    .block-container {
+        max-width: 1280px;
+        padding-top: 1.5rem;
+        padding-bottom: 3rem;
+    }
 
-/* ---------- Typography & Sections ---------- */
-.section-title {
-    font-size: 22px;
-    font-weight: 750;
-    color: #172033;
-    margin-top: 28px;
-    margin-bottom: 5px;
-}
-.section-subtitle {
-    color: #7b8798;
-    font-size: 14px;
-    margin-bottom: 18px;
-}
+    .hero {
+        padding: 2rem;
+        border-radius: 18px;
+        background: linear-gradient(
+            135deg,
+            #0f4c81,
+            #2563a6
+        );
+        color: white;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 8px 25px rgba(15, 76, 129, 0.15);
+    }
 
-/* ---------- Upload Area ---------- */
-div[data-testid="stFileUploader"] {
-    background: white;
-    border: 2px dashed #bfdbfe;
-    border-radius: 18px;
-    padding: 10px;
-}
-div[data-testid="stFileUploader"]:hover {
-    border-color: #60a5fa;
-    background: #fafdff;
-}
+    .hero-title {
+        font-size: 2.2rem;
+        font-weight: 750;
+        margin-bottom: 0.4rem;
+    }
 
-/* ---------- Buttons ---------- */
-.stButton > button {
-    width: 100%;
-    border-radius: 12px;
-    min-height: 48px;
-    border: none;
-    background: linear-gradient(135deg, #2563eb, #0ea5e9);
-    color: white;
-    font-weight: 700;
-    font-size: 15px;
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.20);
-    transition: all 0.2s ease;
-}
-.stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
-}
+    .hero-subtitle {
+        font-size: 1rem;
+        opacity: 0.92;
+    }
 
-/* ---------- Cards ---------- */
-.file-card {
-    background: white;
-    border: 1px solid #e5eaf0;
-    border-radius: 16px;
-    padding: 18px;
-    margin: 15px 0;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.03);
-}
-.file-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    background: #eff6ff;
-    color: #2563eb;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 23px;
-}
-.file-name {
-    font-weight: 700;
-    color: #172033;
-    font-size: 14px;
-}
-.file-info {
-    color: #94a3b8;
-    font-size: 12px;
-    margin-top: 3px;
-}
+    .section-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #0f4c81;
+        margin-top: 1.5rem;
+        margin-bottom: 0.8rem;
+    }
 
-.result-card {
-    background: white;
-    border: 1px solid #e5eaf0;
-    border-radius: 16px;
-    padding: 20px;
-    min-height: 115px;
-    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.035);
-    margin-bottom: 15px;
-}
-.result-label {
-    color: #7b8798;
-    font-size: 12px;
-    font-weight: 650;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
-}
-.result-value {
-    color: #172033;
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 1.5;
-    word-break: break-word;
-}
-.result-value.empty {
-    color: #94a3b8;
-    font-weight: 500;
-    font-style: italic;
-}
+    .language-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #0f4c81;
+        margin-bottom: 0.5rem;
+    }
 
-.property-card {
-    background: white;
-    border: 1px solid #e5eaf0;
-    border-radius: 18px;
-    padding: 24px;
-    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.035);
-    line-height: 1.8;
-    color: #475569;
-    font-size: 14px;
-}
+    .upload-box {
+        padding: 1rem;
+        border-radius: 12px;
+        border: 1px solid #dbe4ef;
+        background: white;
+        margin-bottom: 1rem;
+    }
 
-.metric-card {
-    background: white;
-    border: 1px solid #e5eaf0;
-    border-radius: 15px;
-    padding: 18px;
-    text-align: center;
-}
-.metric-number {
-    font-size: 25px;
-    font-weight: 800;
-    color: #2563eb;
-}
-.metric-label {
-    color: #7b8798;
-    font-size: 12px;
-    margin-top: 4px;
-}
-
-.footer {
-    text-align: center;
-    color: #94a3b8;
-    font-size: 12px;
-    padding: 30px 0 10px 0;
-}
-</style>
-"""
+    </style>
+    """
+)
 
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
 # ============================================================
-# SIDEBAR
+# HELPER FUNCTIONS
 # ============================================================
 
-with st.sidebar:
-    st.markdown(
-        """<div class="sidebar-logo">
-            <div class="sidebar-icon">📄</div>
-            <div class="sidebar-title">LSR Intelligence</div>
-            <div class="sidebar-subtitle">Document Extraction System</div>
-        </div>""",
-        unsafe_allow_html=True,
-    )
+def display_value(value, default="Not available"):
+    """Safely format extracted values for frontend display."""
 
-    st.divider()
-    st.subheader("🧭 Navigation")
+    if value is None:
+        return default
 
-    page = st.radio(
-        "Navigation",
-        ["Document Extraction", "About"],
-        label_visibility="collapsed",
-    )
+    if isinstance(value, str):
+        cleaned = value.strip()
 
-    st.divider()
+        if not cleaned:
+            return default
 
-    st.markdown(
-        """**Pipeline**\n\n"""
-        """📄 Document → 🔍 DocTR OCR → 🧠 Qwen 3B → ✅ Validation → 📊 Results"""
-    )
+        if cleaned.lower() in {
+            "none",
+            "null",
+            "n/a",
+            "not available",
+        }:
+            return default
 
-    st.divider()
-    st.caption("LSR Document Intelligence v1.0")
+        return cleaned
 
-
-# ============================================================
-# MAIN CONTENT AREA
-# ============================================================
-
-if page == "Document Extraction":
-    st.markdown(
-        """<div class="hero">
-            <div class="hero-badge">AI-POWERED DOCUMENT ANALYSIS</div>
-            <div class="hero-title">Extract LSR information <span>automatically.</span></div>
-            <div class="hero-description">
-                Upload a legal property document and let our document intelligence pipeline
-                extract important information automatically using OCR and a local language model.
-            </div>
-        </div>""",
-        unsafe_allow_html=True,
-    )
-
-    # File Upload Header
-    st.markdown('<div class="section-title">Upload Document</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Supported formats: PDF, JPG, JPEG, PNG, TIFF</div>', unsafe_allow_html=True)
-
-    uploaded_file = st.file_uploader(
-        "Choose your LSR document",
-        type=["pdf", "jpg", "jpeg", "png", "tif", "tiff"],
-        label_visibility="collapsed",
-    )
-
-    if uploaded_file:
-        file_size_kb = len(uploaded_file.getvalue()) / 1024
-        extension = Path(uploaded_file.name).suffix.upper().replace(".", "")
-
-        st.markdown(
-            f"""<div class="file-card">
-                <div class="file-icon">📄</div>
-                <div>
-                    <div class="file-name">{uploaded_file.name}</div>
-                    <div class="file-info">{extension} &nbsp;•&nbsp; {file_size_kb:.1f} KB</div>
-                </div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-
-        if st.button("✨ Extract Information", use_container_width=True):
-            with st.spinner("Analyzing document with DocTR and AI..."):
-                try:
-                    response = requests.post(
-                        API_URL,
-                        files={
-                            "file": (
-                                uploaded_file.name,
-                                uploaded_file.getvalue(),
-                                uploaded_file.type,
-                            )
-                        },
-                        timeout=600,
-                    )
-
-                    if response.status_code == 200:
-                        st.session_state["extraction_result"] = response.json()
-                        st.success("Document processed successfully!")
-                    else:
-                        try:
-                            error_message = response.json().get("detail", "Unknown server error.")
-                        except Exception:
-                            error_message = response.text
-                        st.error(f"Extraction failed: {error_message}")
-
-                except requests.exceptions.ConnectionError:
-                    st.error("Unable to connect to the FastAPI server. Make sure the backend is running.")
-                except requests.exceptions.Timeout:
-                    st.error("The document processing took too long. Please try again.")
-                except Exception as exc:
-                    st.error(f"Unexpected error: {exc}")
-
-    # Display Results
-    if "extraction_result" in st.session_state:
-        result = st.session_state["extraction_result"]
-        fields = result.get("extracted_fields", {})
-        processing_time = result.get("processing_time_seconds")
-
-        st.markdown('<div class="section-title">Extracted Information</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-subtitle">Information identified from the uploaded document</div>', unsafe_allow_html=True)
-
-        # Metrics
-        metric1, metric2, metric3 = st.columns(3)
-
-        found_count = sum(1 for value in fields.values() if value not in [None, "", [], {}])
-
-        with metric1:
-            st.markdown(
-                f"""<div class="metric-card">
-                    <div class="metric-number">{found_count}</div>
-                    <div class="metric-label">Fields Extracted</div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
-
-        with metric2:
-            st.markdown(
-                f"""<div class="metric-card">
-                    <div class="metric-number">{len(fields)}</div>
-                    <div class="metric-label">Required Fields</div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
-
-        with metric3:
-            time_display = f"{processing_time:.1f}s" if processing_time is not None else "N/A"
-            st.markdown(
-                f"""<div class="metric-card">
-                    <div class="metric-number">{time_display}</div>
-                    <div class="metric-label">Processing Time</div>
-                </div>""",
-                unsafe_allow_html=True,
-            )
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Basic Information Section
-        st.markdown("### 📋 Basic Information")
-
-        basic_fields = [
-            ("lsr_date", "LSR Date"),
-            ("company_name", "Company Name"),
-            ("application_number", "Application Number"),
-            ("applicant_name", "Applicant Name"),
-            ("co_applicant_name", "Co-Applicant Name"),
-            ("property_owner", "Property Owner"),
+    if isinstance(value, list):
+        values = [
+            str(item).strip()
+            for item in value
+            if item is not None and str(item).strip()
         ]
 
-        for row_start in range(0, len(basic_fields), 2):
-            col1, col2 = st.columns(2)
-            row_fields = basic_fields[row_start : row_start + 2]
+        if not values:
+            return default
 
-            for index, (field_name, label) in enumerate(row_fields):
-                value = fields.get(field_name)
+        return ", ".join(values)
 
-                if isinstance(value, list):
-                    value = ", ".join(str(item) for item in value)
+    return str(value)
 
-                if value in [None, "", [], {}]:
-                    display_value = "Not found"
-                    value_class = "result-value empty"
-                else:
-                    display_value = str(value)
-                    value_class = "result-value"
 
-                card_html = f"""<div class="result-card">
-                    <div class="result-label">{label}</div>
-                    <div class="{value_class}">{display_value}</div>
-                </div>"""
+def prepare_documents(documents):
+    """Prepare backend document objects for Streamlit tables."""
 
-                if index == 0:
-                    col1.markdown(card_html, unsafe_allow_html=True)
-                else:
-                    col2.markdown(card_html, unsafe_allow_html=True)
+    rows = []
 
-        # Property Description Section
-        st.markdown("### 🏠 Property Description")
-        property_description = fields.get("property_description")
+    if not isinstance(documents, list):
+        return rows
 
-        if property_description:
-            st.markdown(
-                f"""<div class="property-card">{property_description}</div>""",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.info("Property description was not found.")
+    for document in documents:
 
-        # Raw JSON Section
-        with st.expander("🔍 View Raw Extraction JSON"):
-            st.json(fields)
+        if not isinstance(document, dict):
+            continue
 
-        # Footer
-        st.markdown(
-            """<div class="footer">
-                LSR Document Intelligence &nbsp;•&nbsp; DocTR + Ollama + Qwen
-            </div>""",
-            unsafe_allow_html=True,
+        rows.append(
+            {
+                "Document Name": display_value(
+                    document.get("document_name"),
+                    "N/A",
+                ),
+                "Document Number": display_value(
+                    document.get("document_number"),
+                    "N/A",
+                ),
+                "Document Date": display_value(
+                    document.get("document_date"),
+                    "N/A",
+                ),
+                "Document Type": display_value(
+                    document.get("document_copy_type"),
+                    "N/A",
+                ),
+                "Additional Details": display_value(
+                    document.get("additional_details"),
+                    "N/A",
+                ),
+            }
         )
 
+    return rows
+
+
+def sanitize_text_for_pdf(text):
+    """Prevent PDF generation from failing on unsupported characters."""
+
+    if not text:
+        return "N/A"
+
+    return (
+        str(text)
+        .encode("ascii", "xmlcharrefreplace")
+        .decode("utf-8")
+    )
+
+
 # ============================================================
-# ABOUT PAGE
+# PDF PAGE NUMBER CANVAS
 # ============================================================
-else:
+
+class NumberedCanvas(canvas.Canvas):
+    """Generate Page X of Y footer."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+
+        total_pages = len(self._saved_page_states)
+
+        for state in self._saved_page_states:
+
+            self.__dict__.update(state)
+
+            self.saveState()
+
+            self.setFont("Helvetica", 8)
+            self.setFillColor(
+                colors.HexColor("#64748B")
+            )
+
+            self.setStrokeColor(
+                colors.HexColor("#E2E8F0")
+            )
+
+            self.setLineWidth(0.5)
+
+            self.line(
+                15 * mm,
+                12 * mm,
+                A4[0] - 15 * mm,
+                12 * mm,
+            )
+
+            page_text = (
+                f"Page {self._pageNumber} "
+                f"of {total_pages}"
+            )
+
+            self.drawRightString(
+                A4[0] - 15 * mm,
+                8 * mm,
+                page_text,
+            )
+
+            self.drawString(
+                15 * mm,
+                8 * mm,
+                "LSR Document Intelligence",
+            )
+
+            self.restoreState()
+
+            super().showPage()
+
+        super().save()
+
+
+# ============================================================
+# PDF GENERATION
+# ============================================================
+
+def generate_pdf_report(result):
+    """Generate complete extraction PDF report."""
+
+    buffer = BytesIO()
+
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=15 * mm,
+        leftMargin=15 * mm,
+        topMargin=15 * mm,
+        bottomMargin=18 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "ReportTitle",
+        parent=styles["Title"],
+        alignment=TA_CENTER,
+        fontSize=18,
+        leading=22,
+        textColor=colors.HexColor("#0F4C81"),
+        spaceAfter=5,
+    )
+
+    subtitle_style = ParagraphStyle(
+        "ReportSubtitle",
+        parent=styles["Normal"],
+        alignment=TA_CENTER,
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor("#64748B"),
+        spaceAfter=15,
+    )
+
+    heading_style = ParagraphStyle(
+        "SectionHeading",
+        parent=styles["Heading2"],
+        fontSize=12,
+        leading=15,
+        textColor=colors.HexColor("#0F4C81"),
+        spaceBefore=12,
+        spaceAfter=6,
+    )
+
+    normal_style = ParagraphStyle(
+        "Body",
+        parent=styles["BodyText"],
+        fontSize=8.5,
+        leading=11.5,
+        textColor=colors.HexColor("#1E293B"),
+    )
+
+    header_style = ParagraphStyle(
+        "TableHeader",
+        parent=normal_style,
+        fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#0F4C81"),
+    )
+
+    story = []
+
+    # --------------------------------------------------------
+    # Header
+    # --------------------------------------------------------
+
+    story.append(
+        Paragraph(
+            "LSR Document Intelligence",
+            title_style,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Legal Search Report — Extraction & Analysis Report",
+            subtitle_style,
+        )
+    )
+
+    filename = result.get(
+        "filename",
+        "Unknown",
+    )
+
+    processing_time = result.get(
+        "processing_time_seconds",
+        "N/A",
+    )
+
+    story.append(
+        Paragraph(
+            (
+                f"<b>File Name:</b> "
+                f"{sanitize_text_for_pdf(filename)}"
+                f"&nbsp;&nbsp; | &nbsp;&nbsp;"
+                f"<b>Processing Time:</b> "
+                f"{processing_time} seconds"
+            ),
+            normal_style,
+        )
+    )
+
+    story.append(Spacer(1, 10))
+
+    # --------------------------------------------------------
+    # Basic Information
+    # --------------------------------------------------------
+
+    story.append(
+        Paragraph(
+            "1. Basic Information",
+            heading_style,
+        )
+    )
+
+    fields = result.get(
+        "extracted_fields",
+        {},
+    )
+
+    translated = result.get(
+        "translated_fields",
+        {},
+    )
+
+    field_mappings = [
+        ("lsr_date", "LSR Date"),
+        ("company_name", "Company Name"),
+        ("application_number", "Application Number"),
+        ("applicant_name", "Applicant Name"),
+        ("co_applicant_name", "Co-Applicant Name"),
+        ("property_owner", "Property Owner"),
+    ]
+
+    basic_data = [
+        [
+            Paragraph("Field", header_style),
+            Paragraph("English Value", header_style),
+            Paragraph("Tamil Value", header_style),
+        ]
+    ]
+
+    for key, label in field_mappings:
+
+        english = sanitize_text_for_pdf(
+            display_value(
+                fields.get(key)
+            )
+        )
+
+        tamil = sanitize_text_for_pdf(
+            display_value(
+                translated.get(key),
+                "கிடைக்கவில்லை",
+            )
+        )
+
+        basic_data.append(
+            [
+                Paragraph(label, normal_style),
+                Paragraph(english, normal_style),
+                Paragraph(tamil, normal_style),
+            ]
+        )
+
+    basic_table = Table(
+        basic_data,
+        colWidths=[
+            40 * mm,
+            70 * mm,
+            70 * mm,
+        ],
+        repeatRows=1,
+    )
+
+    basic_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor("#F1F5F9"),
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.HexColor("#CBD5E1"),
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP",
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    5,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    5,
+                ),
+            ]
+        )
+    )
+
+    story.append(basic_table)
+    story.append(Spacer(1, 10))
+
+    # --------------------------------------------------------
+    # Property Description
+    # --------------------------------------------------------
+
+    story.append(
+        Paragraph(
+            "2. Property Description",
+            heading_style,
+        )
+    )
+
+    english_description = sanitize_text_for_pdf(
+        display_value(
+            fields.get(
+                "property_description"
+            )
+        )
+    )
+
+    tamil_description = sanitize_text_for_pdf(
+        display_value(
+            translated.get(
+                "property_description"
+            ),
+            "கிடைக்கவில்லை",
+        )
+    )
+
+    property_table = Table(
+        [
+            [
+                Paragraph(
+                    "English Description",
+                    header_style,
+                ),
+                Paragraph(
+                    "Tamil Description",
+                    header_style,
+                ),
+            ],
+            [
+                Paragraph(
+                    english_description,
+                    normal_style,
+                ),
+                Paragraph(
+                    tamil_description,
+                    normal_style,
+                ),
+            ],
+        ],
+        colWidths=[
+            90 * mm,
+            90 * mm,
+        ],
+        repeatRows=1,
+    )
+
+    property_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor("#F1F5F9"),
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.HexColor("#CBD5E1"),
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP",
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+            ]
+        )
+    )
+
+    story.append(property_table)
+    story.append(Spacer(1, 10))
+
+    # --------------------------------------------------------
+    # Document Tables
+    # --------------------------------------------------------
+
+    def add_document_section(
+        title,
+        documents,
+    ):
+
+        story.append(
+            Paragraph(
+                title,
+                heading_style,
+            )
+        )
+
+        table_data = [
+            [
+                Paragraph(
+                    "Document Name",
+                    header_style,
+                ),
+                Paragraph(
+                    "Document Number",
+                    header_style,
+                ),
+                Paragraph(
+                    "Document Date",
+                    header_style,
+                ),
+                Paragraph(
+                    "Document Type",
+                    header_style,
+                ),
+                Paragraph(
+                    "Additional Details",
+                    header_style,
+                ),
+            ]
+        ]
+
+        rows = prepare_documents(documents)
+
+        if not rows:
+
+            table_data.append(
+                [
+                    Paragraph(
+                        "No documents found.",
+                        normal_style,
+                    ),
+                    Paragraph(
+                        "N/A",
+                        normal_style,
+                    ),
+                    Paragraph(
+                        "N/A",
+                        normal_style,
+                    ),
+                    Paragraph(
+                        "N/A",
+                        normal_style,
+                    ),
+                    Paragraph(
+                        "N/A",
+                        normal_style,
+                    ),
+                ]
+            )
+
+        else:
+
+            for row in rows:
+
+                table_data.append(
+                    [
+                        Paragraph(
+                            sanitize_text_for_pdf(
+                                row["Document Name"]
+                            ),
+                            normal_style,
+                        ),
+                        Paragraph(
+                            sanitize_text_for_pdf(
+                                row["Document Number"]
+                            ),
+                            normal_style,
+                        ),
+                        Paragraph(
+                            sanitize_text_for_pdf(
+                                row["Document Date"]
+                            ),
+                            normal_style,
+                        ),
+                        Paragraph(
+                            sanitize_text_for_pdf(
+                                row["Document Type"]
+                            ),
+                            normal_style,
+                        ),
+                        Paragraph(
+                            sanitize_text_for_pdf(
+                                row["Additional Details"]
+                            ),
+                            normal_style,
+                        ),
+                    ]
+                )
+
+        table = Table(
+            table_data,
+            colWidths=[
+                43 * mm,
+                30 * mm,
+                25 * mm,
+                25 * mm,
+                57 * mm,
+            ],
+            repeatRows=1,
+        )
+
+        table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#F1F5F9"),
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.5,
+                        colors.HexColor("#CBD5E1"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                ]
+            )
+        )
+
+        story.append(table)
+        story.append(Spacer(1, 10))
+
+    add_document_section(
+        "3. Documents Prior to Disbursal",
+        result.get(
+            "documents_prior_to_disbursal",
+            [],
+        ),
+    )
+
+    add_document_section(
+        "4. Documents Post Disbursal",
+        result.get(
+            "documents_post_disbursal",
+            [],
+        ),
+    )
+
+    document.build(
+        story,
+        canvasmaker=NumberedCanvas,
+    )
+
+    buffer.seek(0)
+
+    return buffer.getvalue()
+
+
+# ============================================================
+# PROJECT HEADER
+# ============================================================
+
+st.markdown(
+    """
+    <div class="hero">
+        <div class="hero-title">
+            📄 LSR Document Intelligence
+        </div>
+        <div class="hero-subtitle">
+            Legal Search Report Extraction & Analysis System
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# UPLOAD SECTION
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">📤 Upload Legal Search Report</div>',
+    unsafe_allow_html=True,
+)
+
+uploaded_file = st.file_uploader(
+    "Select an LSR document",
+    type=[
+        "pdf",
+        "jpg",
+        "jpeg",
+        "png",
+        "tif",
+        "tiff",
+    ],
+    label_visibility="collapsed",
+)
+
+if uploaded_file:
+
+    file_bytes = uploaded_file.getvalue()
+
+    file_size_kb = len(file_bytes) / 1024
+
+    extension = (
+        Path(uploaded_file.name)
+        .suffix
+        .upper()
+        .replace(".", "")
+    )
+
     st.markdown(
-        """<div class="hero">
-            <div class="hero-badge">ABOUT THE SYSTEM</div>
-            <div class="hero-title">LSR Document <span>Intelligence</span></div>
-            <div class="hero-description">
-                An AI-powered document information extraction system designed to automatically
-                identify important information from legal property reports.
-            </div>
-        </div>""",
+        '<div class="upload-box">',
         unsafe_allow_html=True,
     )
 
-    col1, col2, col3 = st.columns(3)
+    info_col1, info_col2, info_col3 = st.columns(3)
 
-    with col1:
-        st.markdown("### 🔍 DocTR\nOptical Character Recognition extracts text from uploaded documents.")
+    with info_col1:
+        st.caption("Filename")
+        st.markdown(
+            f"**{uploaded_file.name}**"
+        )
 
-    with col2:
-        st.markdown("### 🧠 Qwen 3B\nA local language model identifies the predefined fields from the extracted text.")
+    with info_col2:
+        st.caption("File Type")
+        st.write(
+            f"**{extension}**"
+        )
 
-    with col3:
-        st.markdown("### ⚡ FastAPI\nThe backend coordinates document processing and returns structured data.")
+    with info_col3:
+        st.caption("File Size")
+        st.write(
+            f"**{file_size_kb:.1f} KB**"
+        )
 
-    st.markdown("---")
-    st.markdown("### 📌 Extracted Fields")
-    st.write(
-        """
-        The system currently extracts:
-        - LSR Date
-        - Company Name
-        - Applicant Name
-        - Co-Applicant Name
-        - Property Owner
-        - Application Number
-        - Property Description
-        """
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True,
     )
+
+    st.write("")
+
+    start_extraction = st.button(
+        "✨ Start Extraction",
+        type="primary",
+        use_container_width=True,
+    )
+
+    # ========================================================
+    # EXTRACTION
+    # ========================================================
+
+    if start_extraction:
+
+        with st.status(
+            "🔄 Extraction Started...",
+            expanded=True,
+        ) as status:
+
+            st.write(
+                "Uploading document to FastAPI..."
+            )
+
+            try:
+
+                response = requests.post(
+                    API_URL,
+                    files={
+                        "file": (
+                            uploaded_file.name,
+                            file_bytes,
+                            uploaded_file.type
+                            or "application/octet-stream",
+                        )
+                    },
+                    timeout=900,
+                )
+
+                st.write(
+                    "Running OCR, LLM extraction and translation..."
+                )
+
+                if response.status_code == 200:
+
+                    result = response.json()
+
+                    result["filename"] = (
+                        uploaded_file.name
+                    )
+
+                    st.session_state[
+                        "extraction_result"
+                    ] = result
+
+                    status.update(
+                        label="✅ Extraction Completed Successfully",
+                        state="complete",
+                        expanded=False,
+                    )
+
+                    st.success(
+                        "Document processed successfully."
+                    )
+
+                else:
+
+                    try:
+                        error_detail = (
+                            response.json()
+                            .get(
+                                "detail",
+                                "Unknown backend error.",
+                            )
+                        )
+                    except Exception:
+                        error_detail = response.text
+
+                    status.update(
+                        label="❌ Extraction Failed",
+                        state="error",
+                        expanded=True,
+                    )
+
+                    st.error(
+                        f"Backend Error: {error_detail}"
+                    )
+
+            except requests.exceptions.ConnectionError:
+
+                status.update(
+                    label="❌ Backend Connection Failed",
+                    state="error",
+                    expanded=True,
+                )
+
+                st.error(
+                    "Unable to connect to FastAPI. "
+                    "Make sure the backend is running."
+                )
+
+            except requests.exceptions.Timeout:
+
+                status.update(
+                    label="❌ Processing Timeout",
+                    state="error",
+                    expanded=True,
+                )
+
+                st.error(
+                    "The extraction took too long. "
+                    "Please try again."
+                )
+
+            except Exception as exc:
+
+                status.update(
+                    label="❌ Unexpected Error",
+                    state="error",
+                    expanded=True,
+                )
+
+                st.error(
+                    f"Unexpected error: {exc}"
+                )
+
+
+# ============================================================
+# RESULTS
+# ============================================================
+
+if "extraction_result" in st.session_state:
+
+    result = st.session_state[
+        "extraction_result"
+    ]
+
+    fields = result.get(
+        "extracted_fields",
+        {},
+    )
+
+    translated = result.get(
+        "translated_fields",
+        {},
+    )
+
+    prior_docs = result.get(
+        "documents_prior_to_disbursal",
+        [],
+    )
+
+    post_docs = result.get(
+        "documents_post_disbursal",
+        [],
+    )
+
+    processing_time = result.get(
+        "processing_time_seconds",
+        "N/A",
+    )
+
+    st.divider()
+
+    # ========================================================
+    # PROCESSING SUMMARY
+    # ========================================================
+
+    st.markdown(
+        '<div class="section-title">📊 Processing Summary</div>',
+        unsafe_allow_html=True,
+    )
+
+    extracted_count = sum(
+        1
+        for value in fields.values()
+        if value not in (
+            None,
+            "",
+            [],
+            {},
+        )
+    )
+
+    total_documents = (
+        len(prior_docs)
+        + len(post_docs)
+    )
+
+    metric1, metric2, metric3, metric4, metric5 = (
+        st.columns(5)
+    )
+
+    metric1.metric(
+        "Fields Extracted",
+        f"{extracted_count}/{len(fields)}",
+    )
+
+    metric2.metric(
+        "Total Documents",
+        total_documents,
+    )
+
+    metric3.metric(
+        "Prior Disbursal",
+        len(prior_docs),
+    )
+
+    metric4.metric(
+        "Post Disbursal",
+        len(post_docs),
+    )
+
+    metric5.metric(
+        "Processing Time",
+        (
+            f"{processing_time}s"
+            if processing_time != "N/A"
+            else "N/A"
+        ),
+    )
+
+    # ========================================================
+    # BASIC INFORMATION
+    # ========================================================
+
+    st.markdown(
+        '<div class="section-title">📋 Basic Information</div>',
+        unsafe_allow_html=True,
+    )
+
+    english_col, tamil_col = st.columns(2)
+
+    with english_col:
+
+        st.markdown(
+            '<div class="language-title">🇬🇧 English</div>',
+            unsafe_allow_html=True,
+        )
+
+    with tamil_col:
+
+        st.markdown(
+            '<div class="language-title">🇮🇳 தமிழ்</div>',
+            unsafe_allow_html=True,
+        )
+
+    basic_fields = [
+        ("lsr_date", "LSR Date"),
+        ("company_name", "Company Name"),
+        (
+            "application_number",
+            "Application Number",
+        ),
+        (
+            "applicant_name",
+            "Applicant Name",
+        ),
+        (
+            "co_applicant_name",
+            "Co-Applicant Name",
+        ),
+        (
+            "property_owner",
+            "Property Owner",
+        ),
+    ]
+
+    for key, label in basic_fields:
+
+        english_value = display_value(
+            fields.get(key),
+            "Not available",
+        )
+
+        tamil_value = display_value(
+            translated.get(key),
+            "கிடைக்கவில்லை",
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            with st.container(
+                border=True
+            ):
+
+                st.caption(label)
+
+                st.write(
+                    english_value
+                )
+
+        with col2:
+
+            with st.container(
+                border=True
+            ):
+
+                st.caption(label)
+
+                st.write(
+                    tamil_value
+                )
+
+    # ========================================================
+    # PROPERTY DESCRIPTION
+    # ========================================================
+
+    st.markdown(
+        '<div class="section-title">🏠 Property Description</div>',
+        unsafe_allow_html=True,
+    )
+
+    property_col1, property_col2 = (
+        st.columns(2)
+    )
+
+    with property_col1:
+
+        st.markdown(
+            '<div class="language-title">🇬🇧 English Description</div>',
+            unsafe_allow_html=True,
+        )
+
+        with st.container(
+            border=True
+        ):
+
+            st.write(
+                display_value(
+                    fields.get(
+                        "property_description"
+                    ),
+                    "Property description not available.",
+                )
+            )
+
+    with property_col2:
+
+        st.markdown(
+            '<div class="language-title">🇮🇳 Tamil Description</div>',
+            unsafe_allow_html=True,
+        )
+
+        with st.container(
+            border=True
+        ):
+
+            st.write(
+                display_value(
+                    translated.get(
+                        "property_description"
+                    ),
+                    "சொத்து விவரம் கிடைக்கவில்லை.",
+                )
+            )
+
+    # ========================================================
+    # PRIOR DOCUMENTS
+    # ========================================================
+
+    st.markdown(
+        '<div class="section-title">📑 Documents Prior to Disbursal</div>',
+        unsafe_allow_html=True,
+    )
+
+    prior_rows = prepare_documents(
+        prior_docs
+    )
+
+    if prior_rows:
+
+        st.dataframe(
+            prior_rows,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Document Name": st.column_config.TextColumn(
+                    "Document Name",
+                    width="large",
+                ),
+                "Document Number": st.column_config.TextColumn(
+                    "Document Number",
+                    width="medium",
+                ),
+                "Document Date": st.column_config.TextColumn(
+                    "Document Date",
+                    width="medium",
+                ),
+                "Document Type": st.column_config.TextColumn(
+                    "Document Type",
+                    width="medium",
+                ),
+                "Additional Details": st.column_config.TextColumn(
+                    "Additional Details",
+                    width="large",
+                ),
+            },
+        )
+
+    else:
+
+        st.info(
+            "No documents prior to disbursal found."
+        )
+
+    # ========================================================
+    # POST DOCUMENTS
+    # ========================================================
+
+    st.markdown(
+        '<div class="section-title">📑 Documents Post Disbursal</div>',
+        unsafe_allow_html=True,
+    )
+
+    post_rows = prepare_documents(
+        post_docs
+    )
+
+    if post_rows:
+
+        st.dataframe(
+            post_rows,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Document Name": st.column_config.TextColumn(
+                    "Document Name",
+                    width="large",
+                ),
+                "Document Number": st.column_config.TextColumn(
+                    "Document Number",
+                    width="medium",
+                ),
+                "Document Date": st.column_config.TextColumn(
+                    "Document Date",
+                    width="medium",
+                ),
+                "Document Type": st.column_config.TextColumn(
+                    "Document Type",
+                    width="medium",
+                ),
+                "Additional Details": st.column_config.TextColumn(
+                    "Additional Details",
+                    width="large",
+                ),
+            },
+        )
+
+    else:
+
+        st.info(
+            "No documents post disbursal found."
+        )
+
+    # ========================================================
+    # PDF REPORT
+    # ========================================================
+
+    st.markdown(
+        '<div class="section-title">📄 Generate Report</div>',
+        unsafe_allow_html=True,
+    )
+
+    try:
+
+        pdf_bytes = generate_pdf_report(
+            result
+        )
+
+        st.download_button(
+            label="📥 Generate & Download PDF Report",
+            data=pdf_bytes,
+            file_name=(
+                f"LSR_Report_"
+                f"{result.get('filename', 'extracted')}.pdf"
+            ),
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True,
+        )
+
+    except Exception as pdf_error:
+
+        st.warning(
+            f"PDF generation warning: {pdf_error}"
+        )
+
+    # ========================================================
+    # RAW JSON
+    # ========================================================
+
+    with st.expander(
+        "🔍 View Raw Extraction JSON"
+    ):
+
+        st.json(result)
