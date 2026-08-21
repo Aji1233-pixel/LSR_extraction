@@ -22,7 +22,7 @@ class DocumentValidator:
         elapsed = time.perf_counter() - start
 
         print(
-            f"⏱️ Validation: "
+            f"Validation: "
             f"{elapsed:.2f} seconds"
         )
 

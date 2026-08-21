@@ -14,12 +14,16 @@ class DocTREngine:
         ".png",
         ".tif",
         ".tiff",
+        ".txt",
     }
 
     def __init__(self):
-        print("Loading DocTR model...")
+        print("Loading DocTR model (fast mobile)...")
 
+        # Use faster mobile models for better performance
         self.predictor = ocr_predictor(
+            det_arch="db_mobilenet_v3_large",
+            reco_arch="crnn_vgg16_bn",
             pretrained=True
         )
 
@@ -37,8 +41,8 @@ class DocTREngine:
         print("DOCUMENT PROCESSING STARTED")
         print("=" * 50)
 
-        print(f"📄 File: {filename}")
-        print(f"📦 File size: {len(file_bytes) / 1024:.2f} KB")
+        print(f"File: {filename}")
+        print(f"File size: {len(file_bytes) / 1024:.2f} KB")
 
         extension = Path(filename).suffix.lower()
 
@@ -55,43 +59,50 @@ class DocTREngine:
 
         if extension == ".pdf":
             document = DocumentFile.from_pdf(file_bytes)
+        elif extension == ".txt":
+            document = None
         else:
             document = DocumentFile.from_images(file_bytes)
 
         load_time = time.perf_counter() - load_start
 
         print(
-            f"⏱️ Document loading: {load_time:.2f} seconds"
+            f"Document loading: {load_time:.2f} seconds"
         )
 
         # -------------------------------
-        # DocTR OCR
+        # DocTR OCR (skip for .txt files)
         # -------------------------------
 
-        ocr_start = time.perf_counter()
+        if extension == ".txt":
+            text = file_bytes.decode("utf-8")
+            ocr_time = 0.0
+            render_time = 0.0
+        else:
+            ocr_start = time.perf_counter()
 
-        result = self.predictor(document)
+            result = self.predictor(document)
 
-        ocr_time = time.perf_counter() - ocr_start
+            ocr_time = time.perf_counter() - ocr_start
 
-        print(
-            f"⏱️ DocTR OCR: {ocr_time:.2f} seconds"
-        )
+            print(
+                f"DocTR OCR: {ocr_time:.2f} seconds"
+            )
 
-        # -------------------------------
-        # Render OCR text
-        # -------------------------------
+            # -------------------------------
+            # Render OCR text
+            # -------------------------------
 
-        render_start = time.perf_counter()
+            render_start = time.perf_counter()
 
-        text = result.render()
+            text = result.render()
 
-        render_time = time.perf_counter() - render_start
+            render_time = time.perf_counter() - render_start
 
-        print(
-            f"⏱️ OCR text rendering: "
-            f"{render_time:.2f} seconds"
-        )
+            print(
+                f"OCR text rendering: "
+                f"{render_time:.2f} seconds"
+            )
 
         if not text or not text.strip():
             raise RuntimeError(
@@ -99,17 +110,17 @@ class DocTREngine:
             )
 
         print(
-            f"📝 Extracted characters: {len(text)}"
+            f"Extracted characters: {len(text)}"
         )
 
         print(
-            f"📝 Extracted words: {len(text.split())}"
+            f"Extracted words: {len(text.split())}"
         )
 
         total_time = time.perf_counter() - total_start
 
         print(
-            f"⏱️ Total DocTR processing: "
+            f"Total DocTR processing: "
             f"{total_time:.2f} seconds"
         )
 

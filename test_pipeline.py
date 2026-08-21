@@ -1,12 +1,11 @@
-from core.llm.field_extractor import FieldExtractor
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+import requests
+import json
 
-sample_text = """
-================================================================================
-DOC TR OCR RESULT
-================================================================================
-1
-YV LAW ASSOCIATES
+sample_text = """YV LAW ASSOCIATES
 Office No. B/C-10 & A-7, 1st Floor (Road facing), Gemini Parsn Commercial
 Complex (Near Hotel Palmgrove)
 No.1, Kodambakkam High Road, Nungambakkam, Chennai - 600 006
@@ -24,7 +23,7 @@ As desired by you, I am furnishing hereunder the legal scrutiny report with
 title search in respect of the property (Described in part I hereto).
 PART - I: DESCRIPTION OF THE PROPERTY:
 All that Piece and Parcel of Southern Portion of the Vacant Plot No.51
-situated at "LAKSHMIPRIYA NAGAR", Nungmabakkam Village, Thiruvallur
+situated at LAKSHMIPRIYA NAGAR, Nungmabakkam Village, Thiruvallur
 Tk, Thiruvallur Dt., admeasuring 1328 Sq. Ft of land, comprised in Old
 Survey No.44/5, New survey no.44/5D, Patta No.11204 as per Patta sub
 division of New survey no.44/5D, within the Sub-Registration District of
@@ -125,8 +124,8 @@ available records verified at the office of the concerned Sub Registrar
 office. The said property is free from all sorts of encumbrance, lien,
 charges, mortgages etc. Mrs.MALEESHWARI has/have a clear and
 marketable title on the property.
-I further certify that the title deeds intended to be deposited, relating to the
-property and offered as security by way of equitable mortgage and the
+I further certify that the title deeds intended to be deposited, relating to
+the property and offered as security by way of equitable mortgage and the
 documents of title referred to above are perfect evidence of the title and
 that if the said equitable mortgage is created in the manner required by
 law, it would satisfy the requirements of creation of equitable mortgage in
@@ -165,15 +164,15 @@ CORPORATION LTD., executed by Mrs.MALEESHWARI (Original)
 Remarks, if any:- NA
 Yours Faithfully,
 Advocate's signature
-================================================================================
-Time Taken : 96.52 seconds
 """
 
+# Test the API
+response = requests.post(
+    'http://127.0.0.1:8000/api/extract',
+    files={'file': ('test_lsr.txt', sample_text.encode('utf-8'), 'text/plain')},
+    timeout=300
+)
 
-from core.llm.freellm_client import FreeLLMClient
-
-extractor = FieldExtractor(FreeLLMClient())
-
-result = extractor.extract_fields(sample_text)
-
-print(result)
+print(f'Status: {response.status_code}')
+result = response.json()
+print(json.dumps(result, indent=2, ensure_ascii=False))

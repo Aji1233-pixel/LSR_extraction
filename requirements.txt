@@ -3,6 +3,8 @@ uvicorn
 python-multipart
 streamlit
 requests
-ollama
+python-dotenv
+deep-translator
 python-doctr[viz]
 pydantic
+reportlab
