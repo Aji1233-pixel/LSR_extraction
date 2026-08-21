@@ -6,6 +6,7 @@ from core.llm.ollama_client import OllamaClient
 from core.llm.field_extractor import FieldExtractor
 from core.llm.document_extractor import DocumentExtractor
 from core.validation.validator import DocumentValidator
+from core.translation.translator import TamilTranslator
 
 
 router = APIRouter(
@@ -24,11 +25,71 @@ ollama_client = OllamaClient()
 
 field_extractor = FieldExtractor()
 
-document_extractor = DocumentExtractor(
-    ollama_client
-)
+# IMPORTANT:
+# DocumentExtractor creates its own OllamaClient.
+# Do NOT pass ollama_client here.
+document_extractor = DocumentExtractor()
 
 validator = DocumentValidator()
+
+translator = TamilTranslator()
+
+
+# ============================================================
+# TRANSLATION
+# ============================================================
+
+def translate_fields(fields: dict) -> dict:
+    """
+    Translate only the basic extracted fields into Tamil.
+
+    Document lists are intentionally NOT translated.
+    """
+
+    translated_fields = {}
+
+    for field_name, value in fields.items():
+
+        if value is None:
+            translated_fields[field_name] = None
+            continue
+
+        if isinstance(value, list):
+
+            translated_fields[field_name] = [
+                translator.translate(str(item))
+                for item in value
+            ]
+
+            continue
+
+        if not str(value).strip():
+            translated_fields[field_name] = None
+            continue
+
+        try:
+
+            translated_fields[field_name] = (
+                translator.translate(
+                    str(value)
+                )
+            )
+
+        except Exception as exc:
+
+            print(
+                f"⚠️ Translation failed for "
+                f"{field_name}: {exc}"
+            )
+
+            translated_fields[field_name] = None
+
+    return translated_fields
+
+
+# ============================================================
+# EXTRACT DOCUMENT
+# ============================================================
 
 @router.post("/extract")
 def extract_document(file: UploadFile):
@@ -71,6 +132,10 @@ def extract_document(file: UploadFile):
         # DOCTR OCR
         # ====================================================
 
+        print("\n" + "=" * 50)
+        print("DOCUMENT PROCESSING STARTED")
+        print("=" * 50)
+
         raw_text = doctr_engine.extract_text(
             file_bytes=file_bytes,
             filename=file.filename,
@@ -87,6 +152,40 @@ def extract_document(file: UploadFile):
         )
 
         # ====================================================
+        # VALIDATION
+        # ====================================================
+
+        validated_data = validator.validate(
+            extracted_data
+        )
+
+        # ====================================================
+        # TRANSLATION
+        # ====================================================
+
+        print("\n" + "=" * 50)
+        print("TRANSLATION STARTED")
+        print("=" * 50)
+
+        translation_start = time.perf_counter()
+
+        translated_fields = translate_fields(
+            validated_data
+        )
+
+        translation_time = (
+            time.perf_counter()
+            - translation_start
+        )
+
+        print(
+            f"⏱️ Translation: "
+            f"{translation_time:.2f} seconds"
+        )
+
+        print("=" * 50)
+
+        # ====================================================
         # DOCUMENT LIST EXTRACTION
         # ====================================================
 
@@ -94,14 +193,6 @@ def extract_document(file: UploadFile):
             document_extractor.extract_documents(
                 raw_text
             )
-        )
-
-        # ====================================================
-        # VALIDATION
-        # ====================================================
-
-        final_result = validator.validate(
-            extracted_data
         )
 
         # ====================================================
@@ -114,12 +205,10 @@ def extract_document(file: UploadFile):
         )
 
         print("\n" + "=" * 50)
-
         print(
             f"🏁 TOTAL REQUEST TIME: "
             f"{total_time:.2f} seconds"
         )
-
         print("=" * 50 + "\n")
 
         # ====================================================
@@ -127,21 +216,44 @@ def extract_document(file: UploadFile):
         # ====================================================
 
         return {
+
             "success": True,
 
             "filename": file.filename,
 
-            "extracted_fields": final_result,
+            # ----------------------------------------------
+            # BASIC INFORMATION - ENGLISH
+            # ----------------------------------------------
+
+            "extracted_fields": validated_data,
+
+            # ----------------------------------------------
+            # BASIC INFORMATION - TAMIL
+            # ----------------------------------------------
+
+            "translated_fields": translated_fields,
+
+            # ----------------------------------------------
+            # DOCUMENTS PRIOR TO DISBURSAL
+            # ----------------------------------------------
 
             "documents_prior_to_disbursal":
                 document_data[
                     "documents_prior_to_disbursal"
                 ],
 
+            # ----------------------------------------------
+            # DOCUMENTS POST DISBURSAL
+            # ----------------------------------------------
+
             "documents_post_disbursal":
                 document_data[
                     "documents_post_disbursal"
                 ],
+
+            # ----------------------------------------------
+            # PROCESSING TIME
+            # ----------------------------------------------
 
             "processing_time_seconds": round(
                 total_time,
@@ -149,8 +261,16 @@ def extract_document(file: UploadFile):
             ),
         }
 
+    # ========================================================
+    # HTTP ERROR
+    # ========================================================
+
     except HTTPException:
         raise
+
+    # ========================================================
+    # GENERAL ERROR
+    # ========================================================
 
     except Exception as exc:
 

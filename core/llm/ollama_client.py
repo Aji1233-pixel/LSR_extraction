@@ -5,6 +5,11 @@ from ollama import Client
 
 
 class OllamaClient:
+    """
+    Central Ollama client.
+
+    Supports different JSON schemas for different extraction tasks.
+    """
 
     def __init__(self):
 
@@ -22,9 +27,26 @@ class OllamaClient:
             host=self.host
         )
 
-    def generate(self, prompt: str) -> str:
+    def generate(
+        self,
+        prompt: str,
+        response_schema: dict | None = None
+    ) -> str:
+        """
+        Send prompt to Ollama.
 
-        if not prompt.strip():
+        Args:
+            prompt:
+                Prompt sent to the model.
+
+            response_schema:
+                Optional JSON schema for structured output.
+
+        Returns:
+            Raw JSON string returned by Ollama.
+        """
+
+        if not prompt or not prompt.strip():
             raise ValueError(
                 "Prompt cannot be empty."
             )
@@ -32,55 +54,43 @@ class OllamaClient:
         start_time = time.perf_counter()
 
         try:
-            EXTRACTION_SCHEMA = {
-                "type": "object",
-                "properties": {
-                    "lsr_date": {
-                        "type": ["string", "null"]
-                    },
-                    "company_name": {
-                        "type": ["string", "null"]
-                    },
-                    "applicant_name": {
-                        "type": ["string", "null"]
-                    },
-                    "co_applicant_name": {
-                        "type": ["string", "null"]
-                    },
-                    "property_owner": {
-                        "type": ["string", "null"]
-                    },
-                    "application_number": {
-                        "type": ["string", "null"]
-                    },
-                    "property_description": {
-                        "type": ["string", "null"]
-                    }
-                },
-                "required": [
-                    "lsr_date",
-                    "company_name",
-                    "applicant_name",
-                    "co_applicant_name",
-                    "property_owner",
-                    "application_number",
-                    "property_description"
-                ]
-            }
+
+            # ------------------------------------------------
+            # Ollama response format
+            # ------------------------------------------------
+
+            if response_schema is not None:
+                response_format = response_schema
+            else:
+                response_format = "json"
+
+            # ------------------------------------------------
+            # Ollama request
+            # ------------------------------------------------
+
             response = self.client.chat(
+
                 model=self.model,
+
                 messages=[
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                format="json",
+
+                format=response_format,
+
                 options={
-                "temperature": 0,
-                "num_ctx": 8192,
-                "num_predict": 700,
-            }
+                    "temperature": 0,
+
+                    # Keep context large enough for LSR OCR text.
+                    "num_ctx": 8192,
+
+                    # Document extraction needs more output
+                    # than the basic 7-field extraction.
+                    "num_predict": 1200,
+                }
             )
 
             elapsed = (
@@ -98,13 +108,15 @@ class OllamaClient:
             print(
                 "\n========== RAW OLLAMA RESPONSE =========="
             )
+
             print(content)
+
             print(
                 "=========================================\n"
             )
-            
 
-            if not content.strip():
+            if not content or not content.strip():
+
                 raise RuntimeError(
                     "Ollama returned an empty response."
                 )
