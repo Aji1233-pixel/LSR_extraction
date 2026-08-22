@@ -127,9 +127,9 @@ class FreeLLMClient:
                     f"HTTP status: {response.status_code}"
                 )
 
-                # Handle rate limiting with retry
+                # Handle rate limiting with exponential backoff retry
                 if response.status_code == 429:
-                    wait_time = (attempt + 1) * 2  # 2s, 4s, 6s
+                    wait_time = min(2 ** (attempt + 1), 30)  # 4s, 8s, 16s (capped at 30s)
                     print(f"⚠️ Rate limited (429). Waiting {wait_time}s before retry (attempt {attempt + 1}/{max_retries})...")
                     time.sleep(wait_time)
                     continue

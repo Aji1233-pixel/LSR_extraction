@@ -10,6 +10,8 @@ from reportlab.lib.units import inch
 from reportlab.lib.colors import HexColor
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.enums import TA_CENTER
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 # Ensure UTF-8 output so emoji/log messages don't crash
 # on Windows consoles that default to cp1252.
@@ -676,6 +678,18 @@ def reorder_property_description(text: str) -> str:
     return '\n'.join(reordered) if reordered else text
 
 
+# ============================================================
+# TAMIL FONT REGISTRATION (Nirmala UI - Windows built-in)
+# ============================================================
+try:
+    pdfmetrics.registerFont(TTFont('Nirmala', r'C:\Windows\Fonts\Nirmala.ttc', subfontIndex=0))
+    pdfmetrics.registerFontFamily('Nirmala', normal='Nirmala', bold='Nirmala', italic='Nirmala', boldItalic='Nirmala')
+    TAMIL_FONT_AVAILABLE = True
+except Exception as e:
+    print(f"[WARN] Could not register Nirmala Tamil font: {e}")
+    TAMIL_FONT_AVAILABLE = False
+
+
 def generate_pdf_report(result: dict) -> bytes:
     """Generate a PDF report from extraction results with dynamic layout."""
     buffer = BytesIO()
@@ -744,13 +758,16 @@ def generate_pdf_report(result: dict) -> bytes:
         leading=15
     )
 
+    # Tamil font name (falls back to Helvetica if Nirmala unavailable)
+    tamil_font_name = 'Nirmala' if TAMIL_FONT_AVAILABLE else 'Helvetica'
+
     tamil_value_style = ParagraphStyle(
         'TamilValue',
         parent=styles['Normal'],
         fontSize=11,
         spaceAfter=8,
         textColor=HexColor('#059669'),
-        fontName='Helvetica',
+        fontName=tamil_font_name,
         leading=15
     )
 
@@ -799,17 +816,20 @@ def generate_pdf_report(result: dict) -> bytes:
     processing_time = result.get("processing_time_seconds")
     filename = result.get("filename", "Unknown")
 
-    # Non-translatable fields notice
-    story.append(Paragraph("Note: The following fields are not translated (dates, IDs, numbers): LSR Date, Application Number",
-                          ParagraphStyle('Note', parent=styles['Normal'], fontSize=9, textColor=HexColor('#64748b'), fontName='Helvetica-Oblique')))
-    story.append(Spacer(1, 0.15*inch))
+    # Note: Removed the non-translatable fields notice (yellow box) as requested
+
+    # Non-translatable fields (dates, IDs, numbers) - skip Tamil line
+    NO_TRANSLATE_FIELDS_PDF = {"lsr_date", "application_number"}
 
     # Helper to add bilingual field
-    def add_bilingual_field(label, eng_value, tam_value):
+    def add_bilingual_field(label, eng_value, tam_value, field_name=None):
         story.append(Paragraph(label, field_label_style))
         if eng_value and str(eng_value).strip() not in ["Not found", "—", "None", ""]:
             story.append(Paragraph(f"English: {eng_value}", field_value_style))
-            if tam_value and str(tam_value).strip() not in ["—", "None", ""]:
+            # Only show Tamil if: (1) it exists and (2) field is translatable and (3) Tamil differs from English
+            if (tam_value and str(tam_value).strip() not in ["—", "None", ""] and
+                (field_name is None or field_name not in NO_TRANSLATE_FIELDS_PDF) and
+                tam_value != eng_value):
                 story.append(Paragraph(f"தமிழ்: {tam_value}", tamil_value_style))
         else:
             story.append(Paragraph("Not found", empty_style))
@@ -834,7 +854,7 @@ def generate_pdf_report(result: dict) -> bytes:
         tamil_value = translated_fields.get(field_name)
         if isinstance(value, list):
             value = ", ".join(str(item) for item in value)
-        add_bilingual_field(label, value, tamil_value)
+        add_bilingual_field(label, value, tamil_value, field_name)
 
     # ========================================================
     # PROPERTY DESCRIPTION (Reordered)
@@ -1113,21 +1133,7 @@ if st.session_state["current_page"] == "Document Extraction":
         processing_time = result.get("processing_time_seconds")
         filename = result.get("filename", "Unknown")
 
-        # ========================================================
-        # NON-TRANSLATABLE FIELDS NOTICE
-        # ========================================================
-        st.markdown(
-            """<div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px;">
-                <div style="display: flex; align-items: center; gap: 10px; color: #92400e; font-weight: 600; font-size: 14px;">
-                    <span>ℹ️</span>
-                    <span>Note: The following fields are NOT translated to Tamil (dates, IDs, numbers):</span>
-                </div>
-                <div style="margin-top: 8px; color: #b45309; font-size: 13px;">
-                    <strong>LSR Date</strong> &nbsp;•&nbsp; <strong>Application Number</strong>
-                </div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
+        # Note: Non-translatable fields yellow box removed as requested
 
         st.markdown('<div class="section-title">Extracted Information</div>', unsafe_allow_html=True)
         st.markdown('<div class="section-subtitle">Information identified from the uploaded document (English | Tamil) — text is selectable for copying</div>', unsafe_allow_html=True)
