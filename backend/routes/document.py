@@ -38,6 +38,7 @@ print("\n" + "=" * 60)
 print("INITIALIZING LSR DOCUMENT EXTRACTION SYSTEM")
 print("=" * 60)
 
+
 # ------------------------------------------------------------
 # OCR
 # ------------------------------------------------------------
@@ -84,9 +85,121 @@ validator = DocumentValidator()
 tamil_translator = TamilTranslator()
 
 
-print("LSR extraction components initialized")
+print("✅ LSR extraction components initialized")
 print("=" * 60)
 print()
+
+
+# ============================================================
+# TRANSLATION HELPER
+# ============================================================
+
+def translate_fields(
+    fields: dict,
+) -> dict:
+    """
+    Translate extracted fields into Tamil.
+
+    Dates and application numbers are preserved.
+    If translation fails for a field, the original
+    English value is preserved.
+    """
+
+    translated_fields = {}
+
+    no_translate_fields = {
+        "lsr_date",
+        "application_number",
+    }
+
+    for key, value in fields.items():
+
+        # ----------------------------------------------------
+        # Missing value
+        # ----------------------------------------------------
+
+        if value is None:
+            translated_fields[key] = None
+            continue
+
+        if (
+            isinstance(value, str)
+            and not value.strip()
+        ):
+            translated_fields[key] = None
+            continue
+
+        # ----------------------------------------------------
+        # Dates / IDs
+        # ----------------------------------------------------
+
+        if key in no_translate_fields:
+            translated_fields[key] = value
+            continue
+
+        # ----------------------------------------------------
+        # Lists
+        # ----------------------------------------------------
+
+        if isinstance(value, list):
+
+            translated_values = []
+
+            for item in value:
+
+                if item is None:
+                    translated_values.append(None)
+                    continue
+
+                try:
+
+                    translated_values.append(
+                        tamil_translator.translate(
+                            str(item)
+                        )
+                    )
+
+                except Exception as exc:
+
+                    logger.warning(
+                        f"Translation failed "
+                        f"for '{key}': {exc}"
+                    )
+
+                    # Preserve original value
+                    translated_values.append(
+                        item
+                    )
+
+            translated_fields[key] = (
+                translated_values
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # Normal value
+        # ----------------------------------------------------
+
+        try:
+
+            translated_fields[key] = (
+                tamil_translator.translate(
+                    str(value)
+                )
+            )
+
+        except Exception as exc:
+
+            logger.warning(
+                f"Translation failed "
+                f"for '{key}': {exc}"
+            )
+
+            # Do not destroy English extraction
+            translated_fields[key] = value
+
+    return translated_fields
 
 
 # ============================================================
@@ -94,7 +207,9 @@ print()
 # ============================================================
 
 @router.post("/extract")
-def extract_document(file: UploadFile):
+def extract_document(
+    file: UploadFile,
+):
 
     total_start = time.perf_counter()
 
@@ -119,12 +234,12 @@ def extract_document(file: UploadFile):
         )
 
         print(
-            f"File reading: "
+            f"⏱️ File reading: "
             f"{file_time:.2f} seconds"
         )
 
         # ----------------------------------------------------
-        # Empty file check
+        # Empty file
         # ----------------------------------------------------
 
         if not file_bytes:
@@ -134,12 +249,17 @@ def extract_document(file: UploadFile):
                 detail="Uploaded file is empty.",
             )
 
+        # ----------------------------------------------------
+        # File information
+        # ----------------------------------------------------
+
         print(
-            f"Filename: {file.filename}"
+            f"📄 Filename: "
+            f"{file.filename}"
         )
 
         print(
-            f"File size: "
+            f"📦 File size: "
             f"{len(file_bytes) / 1024:.2f} KB"
         )
 
@@ -147,9 +267,9 @@ def extract_document(file: UploadFile):
         # File size validation
         # ----------------------------------------------------
 
-        MAX_FILE_SIZE = 20 * 1024 * 1024
+        max_file_size = 20 * 1024 * 1024
 
-        if len(file_bytes) > MAX_FILE_SIZE:
+        if len(file_bytes) > max_file_size:
 
             raise HTTPException(
                 status_code=400,
@@ -165,16 +285,18 @@ def extract_document(file: UploadFile):
 
         print("\n")
         print("=" * 50)
-        print("DOCTR OCR STARTED")
+        print("🔍 DOCTR OCR STARTED")
         print("=" * 50)
 
         doctr_start = time.perf_counter()
 
         try:
 
-            raw_text = doctr_engine.extract_text(
-                file_bytes=file_bytes,
-                filename=file.filename,
+            raw_text = (
+                doctr_engine.extract_text(
+                    file_bytes=file_bytes,
+                    filename=file.filename,
+                )
             )
 
         except ValueError as exc:
@@ -191,7 +313,8 @@ def extract_document(file: UploadFile):
         except RuntimeError as exc:
 
             logger.error(
-                f"OCR extraction failed: {exc}\n"
+                f"OCR extraction failed: "
+                f"{exc}\n"
                 f"{traceback.format_exc()}"
             )
 
@@ -209,15 +332,18 @@ def extract_document(file: UploadFile):
         )
 
         print(
-            f"DocTR OCR: "
+            f"⏱️ DocTR OCR: "
             f"{doctr_time:.2f} seconds"
         )
 
         # ----------------------------------------------------
-        # OCR result validation
+        # Validate OCR output
         # ----------------------------------------------------
 
-        if not raw_text or not raw_text.strip():
+        if (
+            not raw_text
+            or not raw_text.strip()
+        ):
 
             raise HTTPException(
                 status_code=422,
@@ -228,12 +354,12 @@ def extract_document(file: UploadFile):
             )
 
         print(
-            f"OCR characters: "
+            f"📝 OCR characters: "
             f"{len(raw_text)}"
         )
 
         print(
-            f"OCR words: "
+            f"📝 OCR words: "
             f"{len(raw_text.split())}"
         )
 
@@ -243,7 +369,7 @@ def extract_document(file: UploadFile):
 
         print("\n")
         print("=" * 50)
-        print("BASIC FIELD EXTRACTION")
+        print("📋 BASIC FIELD EXTRACTION")
         print("=" * 50)
 
         field_start = time.perf_counter()
@@ -274,17 +400,85 @@ def extract_document(file: UploadFile):
         )
 
         print(
-            f"Basic field extraction: "
+            f"⏱️ Basic field extraction: "
             f"{field_time:.2f} seconds"
         )
 
         # ====================================================
-        # 4. DOCUMENT LIST EXTRACTION
+        # 4. VALIDATION
         # ====================================================
 
         print("\n")
         print("=" * 50)
-        print("DOCUMENT LIST EXTRACTION")
+        print("✅ VALIDATION")
+        print("=" * 50)
+
+        validation_start = time.perf_counter()
+
+        try:
+
+            final_result = (
+                validator.validate(
+                    extracted_data
+                )
+            )
+
+        except Exception as exc:
+
+            logger.error(
+                f"Validation failed: "
+                f"{exc}\n"
+                f"{traceback.format_exc()}"
+            )
+
+            raise RuntimeError(
+                f"Validation failed: {exc}"
+            ) from exc
+
+        validation_time = (
+            time.perf_counter()
+            - validation_start
+        )
+
+        print(
+            f"⏱️ Validation: "
+            f"{validation_time:.2f} seconds"
+        )
+
+        # ====================================================
+        # 5. TAMIL TRANSLATION
+        # ====================================================
+
+        print("\n")
+        print("=" * 50)
+        print("🌐 TAMIL TRANSLATION")
+        print("=" * 50)
+
+        translation_start = time.perf_counter()
+
+        translated_fields = (
+            translate_fields(
+                final_result
+            )
+        )
+
+        translation_time = (
+            time.perf_counter()
+            - translation_start
+        )
+
+        print(
+            f"⏱️ Tamil translation: "
+            f"{translation_time:.2f} seconds"
+        )
+
+        # ====================================================
+        # 6. DOCUMENT LIST EXTRACTION
+        # ====================================================
+
+        print("\n")
+        print("=" * 50)
+        print("📑 DOCUMENT LIST EXTRACTION")
         print("=" * 50)
 
         document_start = time.perf_counter()
@@ -306,7 +500,8 @@ def extract_document(file: UploadFile):
             )
 
             raise RuntimeError(
-                f"Document list extraction failed: {exc}"
+                f"Document list extraction failed: "
+                f"{exc}"
             ) from exc
 
         document_time = (
@@ -315,173 +510,8 @@ def extract_document(file: UploadFile):
         )
 
         print(
-            f"Document extraction: "
+            f"⏱️ Document extraction: "
             f"{document_time:.2f} seconds"
-        )
-
-        # ====================================================
-        # 5. VALIDATION
-        # ====================================================
-
-        print("\n")
-        print("=" * 50)
-        print("VALIDATION")
-        print("=" * 50)
-
-        validation_start = time.perf_counter()
-
-        try:
-
-            final_result = validator.validate(
-                extracted_data
-            )
-
-        except Exception as exc:
-
-            logger.error(
-                f"Validation failed: "
-                f"{exc}\n"
-                f"{traceback.format_exc()}"
-            )
-
-            raise RuntimeError(
-                f"Validation failed: {exc}"
-            ) from exc
-
-        validation_time = (
-            time.perf_counter()
-            - validation_start
-        )
-
-        print(
-            f"Validation: "
-            f"{validation_time:.2f} seconds"
-        )
-
-        # ====================================================
-        # 6. TAMIL TRANSLATION
-        # ====================================================
-
-        print("\n")
-        print("=" * 50)
-        print("TAMIL TRANSLATION")
-        print("=" * 50)
-
-        translation_start = time.perf_counter()
-
-        translated_fields = {}
-
-        NO_TRANSLATE_FIELDS = {
-            "lsr_date",
-            "application_number",
-        }
-
-        # ----------------------------------------------------
-        # Translate field by field
-        # ----------------------------------------------------
-
-        for key, value in final_result.items():
-
-            # ------------------------------------------------
-            # Missing value
-            # ------------------------------------------------
-
-            if (
-                value is None
-                or str(value).strip() == ""
-            ):
-
-                translated_fields[key] = None
-
-                continue
-
-            # ------------------------------------------------
-            # Date / application number
-            # ------------------------------------------------
-
-            if key in NO_TRANSLATE_FIELDS:
-
-                translated_fields[key] = value
-
-                continue
-
-            # ------------------------------------------------
-            # List value
-            # ------------------------------------------------
-
-            if isinstance(value, list):
-
-                translated_values = []
-
-                for item in value:
-
-                    if item is None:
-
-                        translated_values.append(
-                            None
-                        )
-
-                        continue
-
-                    try:
-
-                        translated_values.append(
-                            tamil_translator.translate(
-                                str(item)
-                            )
-                        )
-
-                    except Exception as exc:
-
-                        logger.warning(
-                            f"Translation failed "
-                            f"for {key}: {exc}"
-                        )
-
-                        # Keep original value
-                        # instead of destroying data.
-                        translated_values.append(
-                            item
-                        )
-
-                translated_fields[key] = (
-                    translated_values
-                )
-
-                continue
-
-            # ------------------------------------------------
-            # Normal string
-            # ------------------------------------------------
-
-            try:
-
-                translated_fields[key] = (
-                    tamil_translator.translate(
-                        str(value)
-                    )
-                )
-
-            except Exception as exc:
-
-                logger.warning(
-                    f"Translation failed "
-                    f"for {key}: {exc}"
-                )
-
-                # IMPORTANT:
-                # Keep English value if translation
-                # fails instead of returning None.
-                translated_fields[key] = value
-
-        translation_time = (
-            time.perf_counter()
-            - translation_start
-        )
-
-        print(
-            f"Tamil translation: "
-            f"{translation_time:.2f} seconds"
         )
 
         # ====================================================
@@ -498,19 +528,19 @@ def extract_document(file: UploadFile):
                 "documents_post_disbursal": [],
             }
 
-        prior_documents = document_data.get(
-            "documents_prior_to_disbursal",
-            [],
+        prior_documents = (
+            document_data.get(
+                "documents_prior_to_disbursal",
+                [],
+            )
         )
 
-        post_documents = document_data.get(
-            "documents_post_disbursal",
-            [],
+        post_documents = (
+            document_data.get(
+                "documents_post_disbursal",
+                [],
+            )
         )
-
-        # ----------------------------------------------------
-        # Ensure lists
-        # ----------------------------------------------------
 
         if not isinstance(
             prior_documents,
@@ -539,39 +569,34 @@ def extract_document(file: UploadFile):
         print("=" * 60)
 
         print(
-            f"TOTAL REQUEST TIME: "
+            f"🏁 TOTAL REQUEST TIME: "
             f"{total_time:.2f} seconds"
         )
 
         print(
-            f"OCR: "
+            f"🔍 OCR: "
             f"{doctr_time:.2f}s"
         )
 
         print(
-            f"Basic fields: "
+            f"📋 Basic fields: "
             f"{field_time:.2f}s"
         )
 
         print(
-            f"Documents: "
+            f"📑 Documents: "
             f"{document_time:.2f}s"
         )
 
         print(
-            f"Validation: "
-            f"{validation_time:.2f}s"
-        )
-
-        print(
-            f"Translation: "
+            f"🌐 Translation: "
             f"{translation_time:.2f}s"
         )
 
         print("=" * 60)
 
         # ====================================================
-        # 9. FINAL API RESPONSE
+        # 9. FINAL RESPONSE
         # ====================================================
 
         response_data = {
@@ -580,17 +605,35 @@ def extract_document(file: UploadFile):
 
             "filename": file.filename,
 
+            # ------------------------------------------------
+            # Basic information
+            # ------------------------------------------------
+
             "extracted_fields": final_result,
+
+            # ------------------------------------------------
+            # Tamil translation
+            # ------------------------------------------------
 
             "translated_fields": translated_fields,
 
-            "documents_prior_to_disbursal": (
-                prior_documents
-            ),
+            # ------------------------------------------------
+            # Prior disbursal documents
+            # ------------------------------------------------
 
-            "documents_post_disbursal": (
-                post_documents
-            ),
+            "documents_prior_to_disbursal":
+                prior_documents,
+
+            # ------------------------------------------------
+            # Post disbursal documents
+            # ------------------------------------------------
+
+            "documents_post_disbursal":
+                post_documents,
+
+            # ------------------------------------------------
+            # Processing time
+            # ------------------------------------------------
 
             "processing_time_seconds": round(
                 total_time,
@@ -608,30 +651,32 @@ def extract_document(file: UploadFile):
         )
 
         print(
-            f"File: {file.filename}"
+            f"📄 File: "
+            f"{file.filename}"
         )
 
         print(
-            f"Fields: {len(final_result)}"
+            f"📋 Fields: "
+            f"{len(final_result)}"
         )
 
         print(
-            f"Prior documents: "
+            f"📑 Prior documents: "
             f"{len(prior_documents)}"
         )
 
         print(
-            f"Post documents: "
+            f"📑 Post documents: "
             f"{len(post_documents)}"
         )
 
         print(
-            f"Total time: "
+            f"⏱️ Total: "
             f"{total_time:.2f}s"
         )
 
         print(
-            "========================================\n"
+            "========================================"
         )
 
         return response_data
@@ -644,43 +689,35 @@ def extract_document(file: UploadFile):
         raise
 
     # ========================================================
-    # RUNTIME / LLM ERROR
+    # GENERAL EXCEPTION
     # ========================================================
 
     except RuntimeError as exc:
 
-        error_message = str(exc)
-
         logger.error(
             f"Runtime error during processing: "
-            f"{error_message}\n"
+            f"{exc}\n"
             f"{traceback.format_exc()}"
         )
 
-        lowered = error_message.lower()
-
-        # ----------------------------------------------------
-        # LLM connection failure
-        # ----------------------------------------------------
+        error_message = str(exc).lower()
 
         if (
-            "connect" in lowered
-            or "connection" in lowered
+            "connect" in error_message
+            or "connection" in error_message
         ):
 
             status_code = 503
 
             detail = (
                 "AI service is unavailable. "
-                "Please make sure the FreeLLM "
-                "service is running."
+                "Please check the FreeLLM service."
             )
 
-        # ----------------------------------------------------
-        # Timeout
-        # ----------------------------------------------------
-
-        elif "timeout" in lowered:
+        elif (
+            "timeout" in error_message
+            or "timed out" in error_message
+        ):
 
             status_code = 504
 
@@ -689,27 +726,16 @@ def extract_document(file: UploadFile):
                 "Please try again."
             )
 
-        # ----------------------------------------------------
-        # Other runtime error
-        # ----------------------------------------------------
-
         else:
 
             status_code = 502
 
-            detail = (
-                f"AI processing failed: "
-                f"{error_message}"
-            )
+            detail = str(exc)
 
         raise HTTPException(
             status_code=status_code,
             detail=detail,
         ) from exc
-
-    # ========================================================
-    # GENERAL EXCEPTION
-    # ========================================================
 
     except Exception as exc:
 
@@ -717,12 +743,6 @@ def extract_document(file: UploadFile):
             f"Unexpected processing failure: "
             f"{exc}\n"
             f"{traceback.format_exc()}"
-        )
-
-        print("\n")
-        print("PROCESSING FAILED")
-        print(
-            f"Error: {exc}"
         )
 
         raise HTTPException(
