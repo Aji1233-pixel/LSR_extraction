@@ -1,8 +1,8 @@
 import os
 import time
 
-from openai import OpenAI
 from dotenv import load_dotenv
+from openai import OpenAI
 
 
 load_dotenv()
@@ -10,12 +10,21 @@ load_dotenv()
 
 class FreeLLMClient:
     """
-    Client for FreeLLMAPI.
+    Client for FreeLLM API.
 
-    Uses the OpenAI-compatible /v1/chat/completions endpoint.
+    Uses an OpenAI-compatible API endpoint.
+
+    Configuration is loaded from .env:
+
+        FREELLM_API_KEY
+        FREELLM_BASE_URL
+        FREELLM_MODEL
     """
 
     def __init__(self):
+        # ========================================================
+        # LOAD CONFIGURATION
+        # ========================================================
 
         self.api_key = os.getenv(
             "FREELLM_API_KEY"
@@ -23,13 +32,17 @@ class FreeLLMClient:
 
         self.base_url = os.getenv(
             "FREELLM_BASE_URL",
-            "http://localhost:3001/v1"
+            "http://127.0.0.1:31415/v1",
         )
 
         self.model = os.getenv(
             "FREELLM_MODEL",
-            "auto"
+            "auto",
         )
+
+        # ========================================================
+        # VALIDATE API KEY
+        # ========================================================
 
         if not self.api_key:
             raise RuntimeError(
@@ -37,15 +50,39 @@ class FreeLLMClient:
                 "in the .env file."
             )
 
+        # ========================================================
+        # CREATE OPENAI CLIENT
+        # ========================================================
+
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
+            timeout=120.0,
+            max_retries=1,
         )
 
-    def generate(self, prompt: str) -> str:
+        print(
+            "✅ FreeLLM client initialized"
+        )
+
+        print(
+            f"🌐 FreeLLM URL: {self.base_url}"
+        )
+
+        print(
+            f"🤖 FreeLLM model: {self.model}"
+        )
+
+    # ============================================================
+    # GENERATE
+    # ============================================================
+
+    def generate(
+        self,
+        prompt: str,
+    ) -> str:
         """
-        Send a prompt to FreeLLMAPI and return
-        the generated text.
+        Send a prompt to FreeLLM and return generated text.
         """
 
         if not prompt or not prompt.strip():
@@ -57,20 +94,33 @@ class FreeLLMClient:
 
         try:
 
-            response = self.client.chat.completions.create(
-                model=self.model,
+            # ====================================================
+            # API REQUEST
+            # ====================================================
 
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
+            response = (
+                self.client
+                .chat
+                .completions
+                .create(
+                    model=self.model,
 
-                temperature=0,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
 
-                max_tokens=1500,
+                    temperature=0,
+
+                    max_tokens=4000,
+                )
             )
+
+            # ====================================================
+            # RESPONSE TIME
+            # ====================================================
 
             elapsed = (
                 time.perf_counter()
@@ -82,22 +132,45 @@ class FreeLLMClient:
                 f"{elapsed:.2f} seconds"
             )
 
+            # ====================================================
+            # VALIDATE RESPONSE
+            # ====================================================
+
+            if not response:
+
+                raise RuntimeError(
+                    "FreeLLM returned no response."
+                )
+
             if not response.choices:
+
                 raise RuntimeError(
                     "FreeLLM returned no choices."
                 )
 
-            content = (
+            message = (
                 response
                 .choices[0]
                 .message
-                .content
             )
 
-            if not content or not content.strip():
+            content = (
+                message.content
+                if message
+                else None
+            )
+
+            if not content:
+
                 raise RuntimeError(
                     "FreeLLM returned an empty response."
                 )
+
+            content = content.strip()
+
+            # ====================================================
+            # DEBUG OUTPUT
+            # ====================================================
 
             print(
                 "\n========== RAW FREELLM RESPONSE =========="
@@ -111,6 +184,10 @@ class FreeLLMClient:
 
             return content
 
+        # ========================================================
+        # ERROR HANDLING
+        # ========================================================
+
         except Exception as exc:
 
             elapsed = (
@@ -121,6 +198,10 @@ class FreeLLMClient:
             print(
                 f"❌ FreeLLM failed after "
                 f"{elapsed:.2f} seconds"
+            )
+
+            print(
+                f"❌ Error: {exc}"
             )
 
             raise RuntimeError(

@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from typing import Optional
 
@@ -8,16 +9,77 @@ from .freellm_client import FreeLLMClient
 
 class FieldExtractor:
     """
-    Hybrid basic-field extractor.
+    Hybrid field extractor for LSR documents.
 
-    Strategy:
-    1. Try deterministic label-based extraction first.
-    2. Use FreeLLM only for fields that could not be extracted.
-    3. Property description is extracted by FreeLLM because it is
-       a long and unstructured section.
+    Extraction strategy:
+    1. Extract simple fields deterministically using labels.
+    2. Identify fields that are still missing.
+    3. Use FreeLLMClient only for missing fields.
+    4. Parse and repair LLM JSON when necessary.
+    5. Return only REQUIRED_FIELDS.
     """
 
+    FIELD_ALIASES = {
+        "lsr_date": [
+            "LSR Date",
+            "Date of Report",
+            "Report Date",
+            "Valuation Date",
+            "Date",
+            "Dated",
+        ],
+        "company_name": [
+            "Company Name",
+            "Lender Name",
+            "Bank Name",
+            "Financial Institution",
+            "Company",
+            "Lender",
+            "Bank",
+        ],
+        "applicant_name": [
+            "Applicant Name",
+            "Borrower Name",
+            "Applicant",
+            "Proposed Borrower",
+            "Borrower",
+        ],
+        "co_applicant_name": [
+            "Co-Applicant Name",
+            "Co-Applicant",
+            "Co Applicant",
+            "Co-Borrower",
+            "Co Borrower",
+            "Joint Applicant",
+        ],
+        "property_owner": [
+            "Property Owner",
+            "Owner Name",
+            "Title Holder",
+            "Owner",
+        ],
+        "application_number": [
+            "Application Number",
+            "Application No",
+            "File No",
+            "Reference No",
+            "App No",
+            "App. No.",
+        ],
+        "property_description": [
+            "Property Description",
+            "Description of Property",
+            "Property Details",
+        ],
+    }
+
     def __init__(self, llm_client: Optional[FreeLLMClient] = None):
+        """
+        Initialize the field extractor.
+
+        If an LLM client is supplied, use it.
+        Otherwise create a FreeLLMClient automatically.
+        """
         self.llm = llm_client or FreeLLMClient()
 
     # ============================================================
@@ -25,16 +87,19 @@ class FieldExtractor:
     # ============================================================
 
     def extract_fields(self, text: str) -> dict:
+        """
+        Extract required fields from OCR/document text.
+        """
 
         if not text or not text.strip():
             raise ValueError("Document text cannot be empty.")
 
-        print("\n" + "=" * 50)
+        print("\n" + "=" * 60)
         print("HYBRID FIELD EXTRACTION STARTED")
-        print("=" * 50)
+        print("=" * 60)
 
-        print(f"📝 Input characters: {len(text)}")
-        print(f"📝 Input words: {len(text.split())}")
+        print(f"Input characters: {len(text)}")
+        print(f"Input words: {len(text.split())}")
 
         start_time = time.perf_counter()
 
@@ -49,7 +114,7 @@ class FieldExtractor:
         label_time = time.perf_counter() - label_start
 
         print(
-            f"⏱️ Label-based extraction: "
+            f"Label-based extraction: "
             f"{label_time:.2f} seconds"
         )
 
@@ -58,10 +123,10 @@ class FieldExtractor:
         for field, value in result.items():
             print(f"{field}: {value}")
 
-        print("======================================\n")
+        print("======================================")
 
         # --------------------------------------------------------
-        # STEP 2: DETERMINE MISSING FIELDS
+        # STEP 2: FIND MISSING FIELDS
         # --------------------------------------------------------
 
         missing_fields = [
@@ -71,7 +136,7 @@ class FieldExtractor:
         ]
 
         print(
-            f"🔎 Missing fields after label extraction: "
+            f"\nMissing fields after label extraction: "
             f"{missing_fields}"
         )
 
@@ -91,7 +156,7 @@ class FieldExtractor:
             llm_time = time.perf_counter() - llm_start
 
             print(
-                f"⏱️ FreeLLM fallback: "
+                f"FreeLLM fallback: "
                 f"{llm_time:.2f} seconds"
             )
 
@@ -123,11 +188,11 @@ class FieldExtractor:
             print(f"{field}: {value}")
 
         print(
-            f"\n⏱️ Total field extraction: "
+            f"\nTotal field extraction: "
             f"{total_time:.2f} seconds"
         )
 
-        print("=" * 50)
+        print("=" * 60)
 
         return final_result
 
@@ -140,13 +205,8 @@ class FieldExtractor:
         lines = self._prepare_lines(text)
 
         result = {
-            "lsr_date": None,
-            "company_name": None,
-            "applicant_name": None,
-            "co_applicant_name": None,
-            "property_owner": None,
-            "application_number": None,
-            "property_description": None,
+            field: None
+            for field in REQUIRED_FIELDS
         }
 
         # --------------------------------------------------------
@@ -156,9 +216,12 @@ class FieldExtractor:
         result["lsr_date"] = self._find_value_after_labels(
             lines,
             [
-                "dated",
-                "date",
                 "lsr date",
+                "dated",
+                "date of report",
+                "report date",
+                "valuation date",
+                "date",
             ],
         )
 
@@ -180,7 +243,9 @@ class FieldExtractor:
                 "name of applicant / borrower/s",
                 "name of applicant / borrower",
                 "applicant / borrower/s",
+                "applicant / borrower",
                 "applicant name",
+                "borrower name",
             ],
         )
 
@@ -198,6 +263,8 @@ class FieldExtractor:
                 "name of co-applicant / borrower/s",
                 "co-applicant name",
                 "co applicant name",
+                "co-borrower name",
+                "co borrower name",
             ],
         )
 
@@ -211,6 +278,9 @@ class FieldExtractor:
                 "name of the property owner",
                 "property owner name",
                 "property owner",
+                "owner name",
+                "title holder",
+                "owner",
             ],
         )
 
@@ -228,14 +298,16 @@ class FieldExtractor:
                 "application no.",
                 "application no",
                 "application number",
+                "file no",
+                "reference no",
             ],
         )
 
         # --------------------------------------------------------
         # PROPERTY DESCRIPTION
         #
-        # We deliberately leave this to FreeLLM.
-        # It is generally a long, unstructured section.
+        # Deliberately left for FreeLLM because it is generally
+        # long and unstructured.
         # --------------------------------------------------------
 
         return result
@@ -244,16 +316,21 @@ class FieldExtractor:
     # COMPANY NAME
     # ============================================================
 
-    def _find_company_name(self, lines: list[str]) -> Optional[str]:
+    def _find_company_name(
+        self,
+        lines: list[str],
+    ) -> Optional[str]:
 
-        # First look for "To,"
+        # --------------------------------------------------------
+        # First: look for "To,"
+        # --------------------------------------------------------
+
         for index, line in enumerate(lines):
 
             normalized = self._normalize(line)
 
-            if normalized == "to," or normalized == "to":
+            if normalized in {"to,", "to"}:
 
-                # Usually the company is on the next meaningful line.
                 value = self._next_meaningful_line(
                     lines,
                     index,
@@ -269,13 +346,19 @@ class FieldExtractor:
                 if value:
                     return self._clean_value(value)
 
-        # Fallback: search for common company indicators.
+        # --------------------------------------------------------
+        # Second: search for company indicators
+        # --------------------------------------------------------
+
         company_words = [
             "limited",
             "ltd",
             "finance",
             "housing finance",
             "bank",
+            "corporation",
+            "private limited",
+            "pvt ltd",
         ]
 
         for line in lines:
@@ -284,7 +367,6 @@ class FieldExtractor:
 
             if any(word in lowered for word in company_words):
 
-                # Avoid obvious unrelated sentences.
                 if len(line.split()) <= 15:
                     return self._clean_value(line)
 
@@ -312,7 +394,7 @@ class FieldExtractor:
             for label in normalized_labels:
 
                 # ------------------------------------------------
-                # Case 1:
+                # CASE 1
                 #
                 # Label:
                 # Value
@@ -329,7 +411,7 @@ class FieldExtractor:
                         return self._clean_value(value)
 
                 # ------------------------------------------------
-                # Case 2:
+                # CASE 2
                 #
                 # Label: Value
                 # ------------------------------------------------
@@ -338,10 +420,12 @@ class FieldExtractor:
 
                     remaining = line.strip()[len(label):].strip()
 
-                    # Remove common separators.
-                    remaining = remaining.lstrip(":：-–")
+                    remaining = remaining.lstrip(
+                        ":：-–"
+                    )
 
                     if remaining.strip():
+
                         return self._clean_value(
                             remaining
                         )
@@ -379,7 +463,10 @@ class FieldExtractor:
     # LABEL DETECTION
     # ============================================================
 
-    def _looks_like_label(self, value: str) -> bool:
+    def _looks_like_label(
+        self,
+        value: str,
+    ) -> bool:
 
         normalized = self._normalize(value)
 
@@ -388,8 +475,8 @@ class FieldExtractor:
             "name of applicant",
             "name of the co applicant",
             "name of the co-applicant",
-            "name of the property owner",
             "property owner",
+            "property owner name",
             "application number",
             "application no",
             "app no",
@@ -398,6 +485,12 @@ class FieldExtractor:
             "property description",
             "name of the company",
             "company name",
+            "applicant name",
+            "borrower name",
+            "co-applicant name",
+            "co applicant name",
+            "owner name",
+            "title holder",
         ]
 
         return any(
@@ -424,11 +517,94 @@ class FieldExtractor:
         print(
             f"Fields requested: {missing_fields}"
         )
-        print("======================================\n")
+        print("======================================")
 
-        response = self.llm.generate(prompt)
+        # --------------------------------------------------------
+        # Retry empty LLM responses
+        # --------------------------------------------------------
 
-        return self._parse_llm_response(response)
+        max_retries = 3
+        response = None
+
+        for attempt in range(max_retries):
+
+            try:
+                response = self.llm.generate(prompt)
+            except Exception as exc:
+                print(
+                    f"FreeLLM error "
+                    f"(attempt {attempt + 1}/{max_retries}): "
+                    f"{exc}"
+                )
+                response = None
+
+            if response and response.strip():
+                break
+
+            print(
+                f"LLM returned empty response "
+                f"(attempt {attempt + 1}/{max_retries})"
+            )
+
+            if attempt < max_retries - 1:
+                time.sleep(1)
+
+        # --------------------------------------------------------
+        # If LLM completely fails
+        # --------------------------------------------------------
+
+        if not response or not response.strip():
+
+            print(
+                "LLM failed after retries. "
+                "Using regex fallback."
+            )
+
+            return self._fallback_extraction(text)
+
+        # --------------------------------------------------------
+        # Parse LLM response
+        # --------------------------------------------------------
+
+        try:
+
+            result = self._parse_llm_response(
+                response
+            )
+
+        except (RuntimeError, json.JSONDecodeError) as exc:
+
+            print(
+                f"LLM JSON parsing failed: {exc}"
+            )
+
+            print(
+                "Using regex fallback."
+            )
+
+            return self._fallback_extraction(text)
+
+        # --------------------------------------------------------
+        # If LLM extracted almost nothing,
+        # use regex as supplementary extraction.
+        # --------------------------------------------------------
+
+        non_null_count = sum(
+            1
+            for value in result.values()
+            if not self._is_missing(value)
+        )
+
+        if non_null_count < 1:
+
+            print(
+                "LLM extracted no useful fields. "
+                "Using regex fallback."
+            )
+
+            return self._fallback_extraction(text)
+
+        return result
 
     # ============================================================
     # FALLBACK PROMPT
@@ -451,9 +627,9 @@ Extract ONLY these missing fields from the legal property document:
 
 Return ONLY valid JSON.
 
-Rules:
+RULES:
 
-1. Extract values only when they are explicitly present.
+1. Extract values only when explicitly present.
 2. Do not guess.
 3. Do not infer.
 4. Preserve names exactly as written.
@@ -466,29 +642,30 @@ Rules:
 FIELD DEFINITIONS:
 
 lsr_date:
-The date associated with the LSR/legal opinion, usually near the
-beginning of the document.
+The date associated with the LSR/legal opinion.
 
 company_name:
-The organization/company addressed in the legal opinion.
+The organization/company/lender/financial institution
+addressed in the legal opinion.
 
 applicant_name:
-Only the applicant/borrower name.
+Only the primary applicant/borrower name.
 
 co_applicant_name:
-Only the co-applicant/borrower name or names.
+Only the co-applicant/co-borrower name or names.
 
 property_owner:
-Only the property owner name or names.
+Only the property owner/title holder name or names.
 
 application_number:
-The application number, APP NO., or equivalent reference.
+The application number, APP NO., file number,
+or equivalent reference number.
 
 property_description:
-The complete property address and description including survey
-numbers, extent, measurements and boundaries.
+The complete property address and description including
+survey numbers, extent, measurements and boundaries.
 
-Required JSON:
+REQUIRED JSON FORMAT:
 
 {{
     "lsr_date": null,
@@ -515,13 +692,17 @@ DOCUMENT TEXT:
     ) -> dict:
 
         if not response or not response.strip():
+
             raise RuntimeError(
                 "FreeLLM returned an empty response."
             )
 
         cleaned = response.strip()
 
-        # Remove Markdown JSON fences if present.
+        # --------------------------------------------------------
+        # Remove Markdown code fences
+        # --------------------------------------------------------
+
         if cleaned.startswith("```"):
 
             lines = cleaned.splitlines()
@@ -534,40 +715,364 @@ DOCUMENT TEXT:
 
             cleaned = "\n".join(lines).strip()
 
+        # --------------------------------------------------------
+        # Direct JSON parse
+        # --------------------------------------------------------
+
         try:
 
             data = json.loads(cleaned)
 
-        except json.JSONDecodeError as exc:
+            return self._extract_fields(data)
+
+        except json.JSONDecodeError:
+            pass
+
+        # --------------------------------------------------------
+        # JSON repair
+        # --------------------------------------------------------
+
+        repaired = self._attempt_json_repair(
+            cleaned
+        )
+
+        if repaired is not None:
+
+            return self._extract_fields(
+                repaired
+            )
+
+        raise RuntimeError(
+            "LLM returned invalid JSON "
+            "that could not be repaired."
+        )
+
+    # ============================================================
+    # JSON REPAIR
+    # ============================================================
+
+    def _attempt_json_repair(
+        self,
+        text: str,
+    ) -> Optional[dict]:
+
+        # --------------------------------------------------------
+        # Strategy 1:
+        # Remove trailing commas and close structures.
+        # --------------------------------------------------------
+
+        try:
+
+            fixed = text.rstrip()
+
+            fixed = re.sub(
+                r",\s*([}\]])",
+                r"\1",
+                fixed,
+            )
+
+            open_braces = max(
+                0,
+                fixed.count("{") - fixed.count("}"),
+            )
+
+            open_brackets = max(
+                0,
+                fixed.count("[") - fixed.count("]"),
+            )
+
+            fixed += "]" * open_brackets
+            fixed += "}" * open_braces
+
+            data = json.loads(fixed)
 
             print(
-                "\n========== INVALID FREELLM JSON =========="
-            )
-            print(cleaned)
-            print(
-                "==========================================\n"
+                "[OK] Repaired JSON "
+                "(trailing commas / brackets)"
             )
 
-            raise RuntimeError(
-                f"FreeLLM returned invalid JSON: {exc}"
-            ) from exc
+            return data
+
+        except json.JSONDecodeError:
+            pass
+
+        # --------------------------------------------------------
+        # Strategy 2:
+        # Recover individual fields using regex.
+        # --------------------------------------------------------
+
+        try:
+
+            return self._extract_from_malformed_json(
+                text
+            )
+
+        except Exception:
+            pass
+
+        return None
+
+    # ============================================================
+    # MALFORMED JSON FIELD EXTRACTION
+    # ============================================================
+
+    def _extract_from_malformed_json(
+        self,
+        text: str,
+    ) -> dict:
+
+        result = {
+            field: None
+            for field in REQUIRED_FIELDS
+        }
+
+        for field in REQUIRED_FIELDS:
+
+            pattern = (
+                rf'"{re.escape(field)}"'
+                r'\s*:\s*"((?:[^"\\]|\\.)*)"'
+            )
+
+            match = re.search(
+                pattern,
+                text,
+            )
+
+            if match:
+
+                value = match.group(1)
+
+                value = (
+                    value
+                    .replace('\\"', '"')
+                    .replace("\\n", "\n")
+                    .replace("\\t", "\t")
+                )
+
+                result[field] = value
+
+                continue
+
+            # ----------------------------------------------------
+            # Check for null
+            # ----------------------------------------------------
+
+            null_pattern = (
+                rf'"{re.escape(field)}"'
+                r"\s*:\s*null"
+            )
+
+            if re.search(
+                null_pattern,
+                text,
+            ):
+                result[field] = None
+
+        non_null = sum(
+            1
+            for value in result.values()
+            if not self._is_missing(value)
+        )
+
+        if non_null > 0:
+
+            print(
+                f"[OK] Extracted {non_null} fields "
+                "from malformed JSON"
+            )
+
+            return result
+
+        raise ValueError(
+            "Could not extract any fields "
+            "from malformed JSON."
+        )
+
+    # ============================================================
+    # EXTRACT REQUIRED FIELDS
+    # ============================================================
+
+    def _extract_fields(
+        self,
+        data: dict,
+    ) -> dict:
 
         if not isinstance(data, dict):
+
             raise RuntimeError(
                 "FreeLLM response must be a JSON object."
             )
 
-        return {
+        result = {
             field: data.get(field)
             for field in REQUIRED_FIELDS
         }
+
+        return result
+
+    # ============================================================
+    # REGEX FALLBACK
+    # ============================================================
+
+    def _fallback_extraction(
+        self,
+        text: str,
+    ) -> dict:
+
+        result = {
+            field: None
+            for field in REQUIRED_FIELDS
+        }
+
+        # --------------------------------------------------------
+        # Generic field extractor
+        # --------------------------------------------------------
+
+        def extract_field(
+            aliases,
+            pattern_suffix=r":\s*([^\n]+)",
+        ):
+
+            for alias in aliases:
+
+                escaped_alias = re.escape(alias)
+
+                pattern = (
+                    escaped_alias
+                    + pattern_suffix
+                )
+
+                match = re.search(
+                    pattern,
+                    text,
+                    re.IGNORECASE,
+                )
+
+                if match:
+
+                    return self._clean_value(
+                        match.group(1)
+                    )
+
+            return None
+
+        # --------------------------------------------------------
+        # Date extractor
+        # --------------------------------------------------------
+
+        def extract_date(aliases):
+
+            for alias in aliases:
+
+                escaped_alias = re.escape(alias)
+
+                pattern = (
+                    escaped_alias
+                    + r"[:]?\s*"
+                    r"(\d{1,2}"
+                    r"[/\-\.]"
+                    r"\d{1,2}"
+                    r"[/\-\.]"
+                    r"\d{2,4})"
+                )
+
+                match = re.search(
+                    pattern,
+                    text,
+                    re.IGNORECASE,
+                )
+
+                if match:
+                    return match.group(1)
+
+            return None
+
+        # --------------------------------------------------------
+        # Basic fields
+        # --------------------------------------------------------
+
+        result["lsr_date"] = extract_date(
+            self.FIELD_ALIASES["lsr_date"]
+        )
+
+        result["company_name"] = extract_field(
+            self.FIELD_ALIASES["company_name"]
+        )
+
+        result["applicant_name"] = extract_field(
+            self.FIELD_ALIASES["applicant_name"]
+        )
+
+        result["co_applicant_name"] = extract_field(
+            self.FIELD_ALIASES["co_applicant_name"]
+        )
+
+        result["property_owner"] = extract_field(
+            self.FIELD_ALIASES["property_owner"]
+        )
+
+        result["application_number"] = extract_field(
+            self.FIELD_ALIASES["application_number"]
+        )
+
+        # --------------------------------------------------------
+        # Property description
+        # --------------------------------------------------------
+
+        desc_start_patterns = [
+            r"Property Description:",
+            r"Description of Property:",
+            r"Property Details:",
+            r"PART\s*-\s*I\s*:\s*DESCRIPTION\s+OF\s+THE\s+PROPERTY",
+        ]
+
+        desc_end_patterns = [
+            r"DOCUMENTS\s+PRIOR\s+TO\s+DISBURSAL",
+            r"PART\s*-\s*II",
+            r"BOUNDARIES",
+            r"LIST\s+OF\s+DOCUMENTS",
+            r"FLOW\s+OF\s+TITLE",
+        ]
+
+        for start_pattern in desc_start_patterns:
+
+            if result.get("property_description"):
+                break
+
+            for end_pattern in desc_end_patterns:
+
+                pattern = (
+                    start_pattern
+                    + r"(.*?)"
+                    + end_pattern
+                )
+
+                match = re.search(
+                    pattern,
+                    text,
+                    re.IGNORECASE | re.DOTALL,
+                )
+
+                if match:
+
+                    result["property_description"] = (
+                        self._clean_value(
+                            match.group(1)
+                        )
+                    )
+
+                    break
+
+        return result
 
     # ============================================================
     # TEXT HELPERS
     # ============================================================
 
     @staticmethod
-    def _prepare_lines(text: str) -> list[str]:
+    def _prepare_lines(
+        text: str,
+    ) -> list[str]:
 
         lines = []
 
@@ -583,13 +1088,14 @@ DOCUMENT TEXT:
         return lines
 
     @staticmethod
-    def _normalize(value: str) -> str:
+    def _normalize(
+        value: str,
+    ) -> str:
 
         value = " ".join(
             value.lower().strip().split()
         )
 
-        # Normalize common OCR variations.
         replacements = {
             "–": "-",
             "—": "-",
@@ -601,22 +1107,26 @@ DOCUMENT TEXT:
 
         value = value.replace(
             " - ",
-            "-"
+            "-",
         )
 
         return value
 
     @staticmethod
-    def _clean_value(value: str) -> Optional[str]:
+    def _clean_value(
+        value: str,
+    ) -> Optional[str]:
 
-        if not value:
+        if value is None:
             return None
+
+        if not isinstance(value, str):
+            return value
 
         value = " ".join(
             value.strip().split()
         )
 
-        # Common OCR/LLM missing-value responses.
         missing_values = {
             "",
             "nil",
@@ -635,7 +1145,9 @@ DOCUMENT TEXT:
         return value
 
     @staticmethod
-    def _is_missing(value) -> bool:
+    def _is_missing(
+        value,
+    ) -> bool:
 
         if value is None:
             return True
