@@ -6,3 +6,4 @@ requests
 ollama
 python-doctr[viz]
 pydantic
+python-dotenv

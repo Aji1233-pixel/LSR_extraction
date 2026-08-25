@@ -1,4 +1,4 @@
-from core.llm.ollama_client import OllamaClient
+from core.llm.freellm_client import FreeLLMClient
 from core.llm.document_extractor import DocumentExtractor
 
 
@@ -24,7 +24,7 @@ S/o Sh. Bishambhar Dayal Singh
 """
 
 
-client = OllamaClient()
+client = FreeLLMClient()
 
 extractor = DocumentExtractor(client)
 

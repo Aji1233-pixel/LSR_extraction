@@ -1,12 +1,14 @@
 from fastapi import APIRouter, HTTPException, UploadFile
 import time
+import concurrent.futures
+import traceback
+import logging
 
 from core.extraction.doctr_engine import DocTREngine
-from core.llm.ollama_client import OllamaClient
+from core.llm.freellm_client import FreeLLMClient
 from core.llm.field_extractor import FieldExtractor
 from core.llm.document_extractor import DocumentExtractor
 from core.validation.validator import DocumentValidator
-from core.translation.translator import TamilTranslator
 
 
 router = APIRouter(
@@ -21,75 +23,15 @@ router = APIRouter(
 
 doctr_engine = DocTREngine()
 
-ollama_client = OllamaClient()
+freellm_client = FreeLLMClient()
 
-field_extractor = FieldExtractor()
+field_extractor = FieldExtractor(freellm_client)
 
-# IMPORTANT:
-# DocumentExtractor creates its own OllamaClient.
-# Do NOT pass ollama_client here.
-document_extractor = DocumentExtractor()
+document_extractor = DocumentExtractor(
+    ollama_client
+)
 
 validator = DocumentValidator()
-
-translator = TamilTranslator()
-
-
-# ============================================================
-# TRANSLATION
-# ============================================================
-
-def translate_fields(fields: dict) -> dict:
-    """
-    Translate only the basic extracted fields into Tamil.
-
-    Document lists are intentionally NOT translated.
-    """
-
-    translated_fields = {}
-
-    for field_name, value in fields.items():
-
-        if value is None:
-            translated_fields[field_name] = None
-            continue
-
-        if isinstance(value, list):
-
-            translated_fields[field_name] = [
-                translator.translate(str(item))
-                for item in value
-            ]
-
-            continue
-
-        if not str(value).strip():
-            translated_fields[field_name] = None
-            continue
-
-        try:
-
-            translated_fields[field_name] = (
-                translator.translate(
-                    str(value)
-                )
-            )
-
-        except Exception as exc:
-
-            print(
-                f"⚠️ Translation failed for "
-                f"{field_name}: {exc}"
-            )
-
-            translated_fields[field_name] = None
-
-    return translated_fields
-
-
-# ============================================================
-# EXTRACT DOCUMENT
-# ============================================================
 
 @router.post("/extract")
 def extract_document(file: UploadFile):
@@ -128,6 +70,17 @@ def extract_document(file: UploadFile):
                 detail="Uploaded file is empty."
             )
 
+        # Validate file size (max 20 MB)
+        MAX_FILE_SIZE = 20 * 1024 * 1024
+        if len(file_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "File too large. Maximum size is "
+                    f"{MAX_FILE_SIZE // (1024*1024)} MB."
+                )
+            )
+
         # ====================================================
         # DOCTR OCR
         # ====================================================
@@ -152,47 +105,21 @@ def extract_document(file: UploadFile):
         )
 
         # ====================================================
-        # VALIDATION
-        # ====================================================
-
-        validated_data = validator.validate(
-            extracted_data
-        )
-
-        # ====================================================
-        # TRANSLATION
-        # ====================================================
-
-        print("\n" + "=" * 50)
-        print("TRANSLATION STARTED")
-        print("=" * 50)
-
-        translation_start = time.perf_counter()
-
-        translated_fields = translate_fields(
-            validated_data
-        )
-
-        translation_time = (
-            time.perf_counter()
-            - translation_start
-        )
-
-        print(
-            f"⏱️ Translation: "
-            f"{translation_time:.2f} seconds"
-        )
-
-        print("=" * 50)
-
-        # ====================================================
-        # DOCUMENT LIST EXTRACTION
+        # PARALLEL EXTRACTION (Fields + Documents)
         # ====================================================
 
         document_data = (
             document_extractor.extract_documents(
                 raw_text
             )
+        )
+
+        # ====================================================
+        # VALIDATION
+        # ====================================================
+
+        final_result = validator.validate(
+            extracted_data
         )
 
         # ====================================================
@@ -221,21 +148,7 @@ def extract_document(file: UploadFile):
 
             "filename": file.filename,
 
-            # ----------------------------------------------
-            # BASIC INFORMATION - ENGLISH
-            # ----------------------------------------------
-
-            "extracted_fields": validated_data,
-
-            # ----------------------------------------------
-            # BASIC INFORMATION - TAMIL
-            # ----------------------------------------------
-
-            "translated_fields": translated_fields,
-
-            # ----------------------------------------------
-            # DOCUMENTS PRIOR TO DISBURSAL
-            # ----------------------------------------------
+            "extracted_fields": final_result,
 
             "documents_prior_to_disbursal":
                 document_data[
@@ -268,14 +181,11 @@ def extract_document(file: UploadFile):
     except HTTPException:
         raise
 
-    # ========================================================
-    # GENERAL ERROR
-    # ========================================================
-
     except Exception as exc:
 
-        print(
-            f"❌ Processing failed: {exc}"
+        logger.error(
+            f"Unexpected processing failure: {exc}\n"
+            f"{traceback.format_exc()}"
         )
 
         raise HTTPException(

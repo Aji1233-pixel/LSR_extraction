@@ -2,8 +2,6 @@ import json
 import re
 import time
 
-from .ollama_client import OllamaClient
-
 
 class DocumentExtractor:
     """Extracts documents required before and after loan disbursal."""
@@ -17,42 +15,23 @@ class DocumentExtractor:
     RE_EXTRACT_DATE = re.compile(r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}")
     RE_HAS_DIGIT = re.compile(r"\d")
 
-    # Static Lookups
-    INVALID_PHRASES = (
-        "issued by",
-        "in the name of",
-        "executed by",
-        "in favour of",
-        "in favor of",
-        "original",
-        "xerox",
-        "photocopy",
-        "online",
-        "certified",
-        "not specified",
-    )
-
-    COPY_TYPES = {
-        "original": "Original",
-        "xerox": "Xerox",
-        "photocopy": "Photocopy",
-        "certified copy": "Certified Copy",
-        "certified": "Certified",
-        "online copy": "Online Copy",
-        "online": "Online",
+    {
+        "document_name": str | None,
+        "document_number": str | None,
+        "document_date": str | None,
+        "additional_details": str | None
     }
 
-    INVALID_DETAILS = {
-        "null",
-        "none",
-        "n/a",
-        "na",
-        "not specified",
-        "not available",
-    }
+    additional_details is used ONLY when BOTH
+    document_number and document_date are unavailable.
+    """
 
-    def __init__(self):
-        self.ollama = OllamaClient()
+    def __init__(self, ollama_client):
+        self.ollama = ollama_client
+
+    # ============================================================
+    # PROMPT
+    # ============================================================
 
     def _build_prompt(self, text: str) -> str:
         return f"""
@@ -73,7 +52,6 @@ For every document return exactly these fields:
 - document_name
 - document_number
 - document_date
-- document_copy_type
 - additional_details
 
 
@@ -138,149 +116,57 @@ DOCUMENT NUMBER
 
 13. The following are NOT document numbers:
 
-    issued by Greater Chennai Corporation
-    issued by Tahsildar, Egmore Taluk
-    in the name of Vasantha Kumar
-    executed by Mrs.Indumathi
-    executed by Mrs.Bhuvaneshwari
-    in favour of Vastu Housing Finance Corporation Limited
-
-14. If no actual document number exists:
-
-    "document_number": null
+- issued by Greater Chennai Corporation
+- issued by Tahsildar
+- in the name of Vasantha Kumar
+- executed by Mrs.Indumathi
+- in favour of a company
 
 
-============================================================
-DOCUMENT DATE
-============================================================
+6. If document_number is not present, return null.
 
-15. document_date must contain ONLY an actual date.
-
-16. Preserve the date exactly as written in the source.
-
-17. If the document does not explicitly contain a date:
-
-    "document_date": null
-
-18. NEVER infer a date.
-
-19. NEVER copy a date from another document.
-
-20. A date belongs ONLY to the document to which it is explicitly
-    associated.
+7. If document_date is not present, return null.
 
 
-============================================================
-DOCUMENT COPY TYPE
-============================================================
+8. additional_details MUST be used ONLY when BOTH:
 
-21. document_copy_type represents how the document copy is provided
-    in the LSR.
-
-Possible values include:
-
-    Original
-    Xerox
-    Photocopy
-    Certified Copy
-    Certified
-    Online Copy
-    Online
-
-22. Extract the value exactly as stated in the source.
-
-23. Do NOT guess the copy type.
-
-24. Do NOT copy the copy type from another document.
-
-25. If the copy type is not explicitly available:
-
-    "document_copy_type": null
-
-26. IMPORTANT:
-
-    "Original", "Xerox", "Online", etc. MUST NEVER be placed inside
-    document_number.
-
-    They belong ONLY in document_copy_type.
+document_number is null
+AND
+document_date is null
 
 
-============================================================
-ADDITIONAL DETAILS
-============================================================
+9. When BOTH document_number and document_date are missing,
+use additional_details to preserve useful reference information.
 
-27. additional_details contains useful descriptive/reference
-    information that does NOT belong in:
+Examples of useful additional details:
 
-    - document_name
-    - document_number
-    - document_date
-    - document_copy_type
-
-28. Examples:
-
-    issued by Greater Chennai Corporation
-
-    issued by Tahsildar, Egmore Taluk
-
-    in the name of Mr.Vasantha Kumar
-
-    executed by Mrs.Indumathi
-
-    executed by Mrs.Bhuvaneshwari and Mrs.Malini
-
-    in favour of Vastu Housing Finance Corporation Limited
-
-29. IMPORTANT:
-
-    additional_details should be preserved whenever such information
-    is explicitly associated with the document.
-
-30. Do NOT move descriptive information into document_number.
-
-31. Do NOT move descriptive information into document_date.
-
-32. Do NOT move descriptive information into document_copy_type.
-
-33. If there is no useful additional information:
-
-    "additional_details": null
+- issued by Greater Chennai Corporation
+- issued by Tahsildar, Egmore Taluk
+- in the name of Vasantha Kumar
+- executed by a named person
+- in favour of a named company
 
 
-============================================================
-MISSING VALUES
-============================================================
-
-34. Never guess.
-
-35. Never infer.
-
-36. Use null when information is not explicitly available.
-
-37. Missing document number:
-
-    "document_number": null
-
-38. Missing document date:
-
-    "document_date": null
-
-39. Missing copy type:
-
-    "document_copy_type": null
-
-40. Missing additional information:
-
-    "additional_details": null
+10. If EITHER document_number OR document_date exists,
+additional_details MUST be null.
 
 
-============================================================
-IMPORTANT EXAMPLES
-============================================================
+11. Never invent or guess a document number or date.
 
-Example 1:
+12. Keep information belonging to the same document together.
 
-Source:
+13. Preserve the values appearing in the source document.
+
+14. If no documents are present under a section,
+return an empty list.
+
+15. Return ONLY valid JSON.
+Do not return explanations or markdown.
+
+
+EXAMPLE 1
+
+Input:
 
 Partition Deed No.2867/1998 dated 25-09-1998
 Original
@@ -291,7 +177,6 @@ Output:
     "document_name": "Partition Deed",
     "document_number": "2867/1998",
     "document_date": "25-09-1998",
-    "document_copy_type": "Original",
     "additional_details": null
 }}
 
@@ -310,8 +195,7 @@ Output:
     "document_name": "Town Survey Field Register Extract",
     "document_number": null,
     "document_date": "05-02-2001",
-    "document_copy_type": "Original",
-    "additional_details": "in the name of Mr.Vasantha Kumar"
+    "additional_details": null
 }}
 
 
@@ -329,45 +213,22 @@ Output:
     "document_name": "Death Certificate of Vasantha Kumar",
     "document_number": null,
     "document_date": null,
-    "document_copy_type": "Online",
     "additional_details": "issued by Greater Chennai Corporation"
 }}
 
 
-Example 4:
+EXAMPLE 4
 
-Source:
+Input:
 
-Legal Heir-Ship Certificate of Vasantha Kumar
-issued by Tahsildar, Egmore Taluk
-Online
+Property Tax Receipt in the name of Vasantha Kumar
 
 Output:
 
 {{
-    "document_name": "Legal Heir-Ship Certificate of Vasantha Kumar",
-    "document_number": null,
+    "document_name": "Online Patta",
+    "document_number": "11204",
     "document_date": null,
-    "document_copy_type": "Online",
-    "additional_details": "issued by Tahsildar, Egmore Taluk"
-}}
-
-
-Example 5:
-
-Source:
-
-Property Tax Receipt
-in the name of Vasantha Kumar
-Xerox
-
-Output:
-
-{{
-    "document_name": "Property Tax Receipt",
-    "document_number": null,
-    "document_date": null,
-    "document_copy_type": "Xerox",
     "additional_details": "in the name of Vasantha Kumar"
 }}
 
@@ -402,7 +263,6 @@ Return ONLY this JSON structure:
             "document_name": "...",
             "document_number": null,
             "document_date": null,
-            "document_copy_type": null,
             "additional_details": null
         }}
     ],
@@ -412,7 +272,6 @@ Return ONLY this JSON structure:
             "document_name": "...",
             "document_number": null,
             "document_date": null,
-            "document_copy_type": null,
             "additional_details": null
         }}
     ]
@@ -431,18 +290,19 @@ DOCUMENT TEXT
 """.strip()
 
     def _parse_response(self, response: str) -> dict:
-        if not response or not response.strip():
-            raise RuntimeError("Document extractor returned an empty response.")
 
         try:
             data = json.loads(response)
+
         except json.JSONDecodeError as exc:
-            raise RuntimeError(
-                f"Document extractor returned invalid JSON: {exc}"
+            raise ValueError(
+                f"Invalid JSON returned by LLM: {exc}"
             ) from exc
 
         if not isinstance(data, dict):
-            raise RuntimeError("Document extractor response must be a JSON object.")
+            raise ValueError(
+                "LLM response must be a JSON object."
+            )
 
         return data
 
@@ -542,10 +402,53 @@ DOCUMENT TEXT
             return []
 
         normalized = []
-        for doc in documents:
-            cleaned = self._normalize_document(doc)
-            if cleaned is not None:
-                normalized.append(cleaned)
+
+        for document in documents:
+
+            if not isinstance(document, dict):
+                continue
+
+            document_name = document.get(
+                "document_name"
+            )
+
+            document_number = document.get(
+                "document_number"
+            )
+
+            document_date = document.get(
+                "document_date"
+            )
+
+            additional_details = document.get(
+                "additional_details"
+            )
+
+            # ----------------------------------------------------
+            # Enforce our business rule in Python too.
+            #
+            # If either number OR date exists,
+            # additional_details must be null.
+            # ----------------------------------------------------
+
+            if document_number or document_date:
+                additional_details = None
+
+            normalized.append(
+                {
+                    "document_name":
+                        document_name,
+
+                    "document_number":
+                        document_number,
+
+                    "document_date":
+                        document_date,
+
+                    "additional_details":
+                        additional_details,
+                }
+            )
 
         return normalized
 
@@ -565,24 +468,78 @@ DOCUMENT TEXT
         print(f"⏱️ Prompt construction: {time.perf_counter() - start:.2f} seconds")
         print(f"📝 Prompt characters: {len(prompt)}")
 
-        # Ollama call
+        # --------------------------------------------------------
+        # Ollama
+        # --------------------------------------------------------
+
         start = time.perf_counter()
-        response = self.ollama.generate(prompt)
-        print(f"⏱️ Ollama response: {time.perf_counter() - start:.2f} seconds")
-        print("\n========== RAW DOCUMENT RESPONSE ==========")
+
+        response = self.ollama.generate(
+            prompt
+        )
+
+        llm_time = (
+            time.perf_counter()
+            - start
+        )
+
+        print(
+            f"⏱️ Ollama response: "
+            f"{llm_time:.2f} seconds"
+        )
+
+        print(
+            "\n========== RAW DOCUMENT RESPONSE =========="
+        )
+
         print(response)
         print("============================================")
 
-        # Parse JSON
-        start = time.perf_counter()
-        data = self._parse_response(response)
-        print(f"⏱️ JSON parsing: {time.perf_counter() - start:.2f} seconds")
+        # --------------------------------------------------------
+        # JSON parsing
+        # --------------------------------------------------------
 
-        # Normalize
-        prior_docs = self._normalize_documents(
-            data.get("documents_prior_to_disbursal", [])
+        start = time.perf_counter()
+
+        data = self._parse_response(
+            response
         )
-        post_docs = self._normalize_documents(data.get("documents_post_disbursal", []))
+
+        parsing_time = (
+            time.perf_counter()
+            - start
+        )
+
+        print(
+            f"⏱️ JSON parsing: "
+            f"{parsing_time:.2f} seconds"
+        )
+
+        # --------------------------------------------------------
+        # Normalize prior documents
+        # --------------------------------------------------------
+
+        prior_documents = (
+            self._normalize_documents(
+                data.get(
+                    "documents_prior_to_disbursal",
+                    []
+                )
+            )
+        )
+
+        # --------------------------------------------------------
+        # Normalize post documents
+        # --------------------------------------------------------
+
+        post_documents = (
+            self._normalize_documents(
+                data.get(
+                    "documents_post_disbursal",
+                    []
+                )
+            )
+        )
 
         result = {
             "documents_prior_to_disbursal": prior_docs,
