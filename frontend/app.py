@@ -10,16 +10,17 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import mm
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-    PageBreak,
-)
+from reportlab.lib.units import inch
+from reportlab.lib.colors import HexColor
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.enums import TA_CENTER
 
+# Ensure UTF-8 output so emoji/log messages don't crash
+# on Windows consoles that default to cp1252.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # ============================================================
 # CONFIGURATION
@@ -288,29 +289,454 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    st.divider()
-    st.subheader("🧭 Navigation")
 
-    page = st.radio(
-        "Navigation",
-        [
-            "Document Extraction",
-            "About",
-        ],
-        label_visibility="collapsed",
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+
+def render_bilingual_field(label, english_value, tamil_value):
+    """Render a field with English on left, Tamil on right (both selectable)."""
+    if english_value in [None, "", [], {}]:
+        eng_display = "Not found"
+        eng_class = "bilingual-value empty"
+        tam_display = "—"
+    else:
+        eng_display = str(english_value)
+        eng_class = "bilingual-value"
+        tam_display = tamil_value or "—"
+
+    html = f"""
+    <div class="bilingual-card">
+        <div class="bilingual-label">{label}</div>
+        <div class="bilingual-row">
+            <div class="bilingual-col">
+                <div class="bilingual-col-title">English</div>
+                <div class="{eng_class}">{eng_display}</div>
+            </div>
+            <div class="bilingual-col">
+                <div class="bilingual-col-title">தமிழ் (Tamil)</div>
+                <div class="bilingual-value tamil">{tam_display}</div>
+            </div>
+        </div>
+    </div>
+    """
+    return html
+
+
+def render_property_bilingual(english_desc, tamil_desc):
+    """Render property description with English on left, Tamil on right."""
+    if not english_desc:
+        eng_display = "Not found"
+        eng_class = "property-bilingual-text empty"
+        tam_display = "—"
+    else:
+        eng_display = str(english_desc)
+        eng_class = "property-bilingual-text"
+        tam_display = tamil_desc or "—"
+
+    html = f"""
+    <div class="property-bilingual">
+        <div class="property-bilingual-row">
+            <div class="property-bilingual-col">
+                <div class="property-bilingual-title">English</div>
+                <div class="{eng_class}">{eng_display}</div>
+            </div>
+            <div class="property-bilingual-col">
+                <div class="property-bilingual-title">தமிழ் (Tamil)</div>
+                <div class="property-bilingual-text tamil">{tam_display}</div>
+            </div>
+        </div>
+    </div>
+    """
+    return html
+
+
+def render_doc_table(documents, title):
+    """Render document list as a table."""
+    st.markdown(f'<div class="doc-table-title">{title}</div>', unsafe_allow_html=True)
+    if not documents:
+        st.info("No documents found in this category.")
+        return
+
+    rows = []
+    for doc in documents:
+        doc_name = doc.get("document_name") or "—"
+        doc_number = doc.get("document_number") or "—"
+        doc_date = doc.get("document_date") or "—"
+        doc_mode = doc.get("mode_of_document") or "—"
+        extra = doc.get("additional_details") or ""
+        rows.append({
+            "Deed Name": doc_name,
+            "Doc No.": doc_number,
+            "Date": doc_date,
+            "Mode": doc_mode,
+            "Additional Details": extra,
+        })
+
+    st.dataframe(
+        rows,
+        use_container_width=True,
+        hide_index=True,
     )
-    st.divider()
 
-    st.markdown(
-        """**Pipeline**\n\n"""
-        """📄 Document → 🔍 DocTR OCR → 🧠 Qwen 3B → ✅ Validation → 📊 Results"""
+
+def reorder_property_description(text: str) -> str:
+    """
+    Reorder property description to show address first, then boundaries/extent.
+
+    Expected input format contains:
+    - Address/location info
+    - Survey/khewat/khatoni details
+    - Extent/measurements
+    - Boundaries (North, South, East, West)
+    """
+    if not text:
+        return text
+
+    lines = text.strip().split('\n')
+
+    # Categories for reordering
+    address_lines = []
+    survey_lines = []
+    extent_lines = []
+    boundary_lines = []
+    other_lines = []
+
+    boundary_keywords = ['north:', 'south:', 'east:', 'west:', 'north ', 'south ', 'east ', 'west ']
+    extent_keywords = ['measuring', 'extent', 'area', 'sq.ft', 'sq ft', 'acre', 'hectare', 'cent', 'ground']
+    survey_keywords = ['survey', 'khewat', 'khatoni', 'khata', 'plot no', 'plot number', 'door no', 'door number']
+    address_keywords = ['situated', 'located', 'at ', 'address', 'road', 'street', 'village', 'town', 'city', 'district', 'pincode', 'pin code', 'chennai', 'main road']
+    # Keep headers like "Bounded by:" with the boundary section
+    header_keywords = ['bounded by', 'boundaries:', 'boundary:']
+
+    for line in lines:
+        line_lower = line.lower().strip()
+        if not line_lower:
+            continue
+
+        is_boundary = any(kw in line_lower for kw in boundary_keywords)
+        is_extent = any(kw in line_lower for kw in extent_keywords)
+        is_survey = any(kw in line_lower for kw in survey_keywords)
+        is_address = any(kw in line_lower for kw in address_keywords)
+        is_header = any(kw in line_lower for kw in header_keywords)
+
+        if is_boundary:
+            boundary_lines.append(line)
+        elif is_extent:
+            extent_lines.append(line)
+        elif is_survey:
+            survey_lines.append(line)
+        elif is_address:
+            address_lines.append(line)
+        elif is_header:
+            boundary_lines.insert(0, line)  # Put header at start of boundaries
+        else:
+            other_lines.append(line)
+
+    # Reorder: Address -> Survey -> Extent -> Boundaries -> Other
+    reordered = []
+    reordered.extend(address_lines)
+    reordered.extend(survey_lines)
+    reordered.extend(extent_lines)
+    reordered.extend(boundary_lines)
+    reordered.extend(other_lines)
+
+    return '\n'.join(reordered) if reordered else text
+
+
+def generate_pdf_report(result: dict) -> bytes:
+    """Generate a PDF report from extraction results with dynamic layout."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=0.75*inch,
+        leftMargin=0.75*inch,
+        topMargin=0.75*inch,
+        bottomMargin=0.75*inch
     )
 
-    st.divider()
+    styles = getSampleStyleSheet()
 
-    st.caption(
-        "LSR Document Intelligence v1.0"
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        spaceAfter=6,
+        textColor=HexColor('#1e293b'),
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
     )
+
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=20,
+        textColor=HexColor('#64748b'),
+        alignment=TA_CENTER,
+        fontName='Helvetica'
+    )
+
+    section_style = ParagraphStyle(
+        'SectionHeader',
+        parent=styles['Heading2'],
+        fontSize=16,
+        spaceBefore=16,
+        spaceAfter=8,
+        textColor=HexColor('#1e293b'),
+        fontName='Helvetica-Bold',
+        borderWidth=0,
+        borderPadding=0,
+    )
+
+    field_label_style = ParagraphStyle(
+        'FieldLabel',
+        parent=styles['Normal'],
+        fontSize=10,
+        spaceBefore=4,
+        spaceAfter=2,
+        textColor=HexColor('#64748b'),
+        fontName='Helvetica-Bold',
+        textTransform='uppercase'
+    )
+
+    field_value_style = ParagraphStyle(
+        'FieldValue',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=8,
+        textColor=HexColor('#1e293b'),
+        fontName='Helvetica',
+        leading=15
+    )
+
+    tamil_value_style = ParagraphStyle(
+        'TamilValue',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=8,
+        textColor=HexColor('#059669'),
+        fontName='Helvetica',
+        leading=15
+    )
+
+    empty_style = ParagraphStyle(
+        'EmptyValue',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=8,
+        textColor=HexColor('#cbd5e1'),
+        fontName='Helvetica-Oblique',
+        leading=15
+    )
+
+    # Table cell style for wrapping
+    cell_style = ParagraphStyle(
+        'CellStyle',
+        parent=styles['Normal'],
+        fontSize=8,
+        leading=10,
+        fontName='Helvetica',
+        spaceBefore=0,
+        spaceAfter=0,
+    )
+
+    cell_style_bold = ParagraphStyle(
+        'CellStyleBold',
+        parent=styles['Normal'],
+        fontSize=8,
+        leading=10,
+        fontName='Helvetica-Bold',
+        spaceBefore=0,
+        spaceAfter=0,
+        textColor=HexColor('#ffffff'),
+    )
+
+    story = []
+
+    # Title
+    story.append(Paragraph("LSR Document Intelligence", title_style))
+    story.append(Paragraph("Extracted Information Report", subtitle_style))
+    story.append(Spacer(1, 0.2*inch))
+
+    # Metadata
+    fields = result.get("extracted_fields", {})
+    translated_fields = result.get("translated_fields", {})
+    processing_time = result.get("processing_time_seconds")
+    filename = result.get("filename", "Unknown")
+
+    # Non-translatable fields notice
+    story.append(Paragraph("Note: The following fields are not translated (dates, IDs, numbers): LSR Date, Application Number",
+                          ParagraphStyle('Note', parent=styles['Normal'], fontSize=9, textColor=HexColor('#64748b'), fontName='Helvetica-Oblique')))
+    story.append(Spacer(1, 0.15*inch))
+
+    # Helper to add bilingual field
+    def add_bilingual_field(label, eng_value, tam_value):
+        story.append(Paragraph(label, field_label_style))
+        if eng_value and str(eng_value).strip() not in ["Not found", "—", "None", ""]:
+            story.append(Paragraph(f"English: {eng_value}", field_value_style))
+            if tam_value and str(tam_value).strip() not in ["—", "None", ""]:
+                story.append(Paragraph(f"தமிழ்: {tam_value}", tamil_value_style))
+        else:
+            story.append(Paragraph("Not found", empty_style))
+        story.append(Spacer(1, 0.05*inch))
+
+    # ========================================================
+    # BASIC INFORMATION
+    # ========================================================
+    story.append(Paragraph("📋 Basic Information", section_style))
+
+    basic_fields = [
+        ("lsr_date", "LSR Date"),
+        ("company_name", "Company Name"),
+        ("application_number", "Application Number"),
+        ("applicant_name", "Applicant Name"),
+        ("co_applicant_name", "Co-Applicant Name"),
+        ("property_owner", "Property Owner"),
+    ]
+
+    for field_name, label in basic_fields:
+        value = fields.get(field_name)
+        tamil_value = translated_fields.get(field_name)
+        if isinstance(value, list):
+            value = ", ".join(str(item) for item in value)
+        add_bilingual_field(label, value, tamil_value)
+
+    # ========================================================
+    # PROPERTY DESCRIPTION (Reordered)
+    # ========================================================
+    story.append(Paragraph("🏠 Property Description", section_style))
+
+    property_description = fields.get("property_description")
+    property_tamil = translated_fields.get("property_description")
+
+    if property_description:
+        reordered_eng = reorder_property_description(property_description)
+        reordered_tam = reorder_property_description(property_tamil) if property_tamil else ""
+        story.append(Paragraph("English:", field_label_style))
+        story.append(Paragraph(reordered_eng, field_value_style))
+        if reordered_tam:
+            story.append(Paragraph("தமிழ்:", field_label_style))
+            story.append(Paragraph(reordered_tam, tamil_value_style))
+    else:
+        story.append(Paragraph("Not found", empty_style))
+
+    # ========================================================
+    # HELPER: Create dynamic document table
+    # ========================================================
+    def create_document_table(documents, title, header_color):
+        """Create a document table with dynamic column widths and proper text wrapping."""
+        if not documents:
+            return None
+
+        story.append(Paragraph(title, section_style))
+
+        # Prepare data with Paragraph objects for text wrapping
+        headers = ["Deed Name", "Doc No.", "Date", "Mode", "Additional Details"]
+        doc_data = [headers]
+
+        # Calculate max content length for each column to determine widths
+        col_max_lengths = [len(h) for h in headers]
+
+        for doc in documents:
+            row = [
+                str(doc.get("document_name") or "—"),
+                str(doc.get("document_number") or "—"),
+                str(doc.get("document_date") or "—"),
+                str(doc.get("mode_of_document") or "—"),
+                str(doc.get("additional_details") or "—"),
+            ]
+            for i, cell in enumerate(row):
+                col_max_lengths[i] = max(col_max_lengths[i], len(cell))
+            doc_data.append(row)
+
+        # Calculate dynamic column widths based on content
+        # Available width = page width - margins = 595 - 54 - 54 = 487 points ≈ 6.76 inches
+        available_width = 6.5 * inch
+        # Base widths proportional to max content, with minimums
+        min_widths = [1.2*inch, 0.8*inch, 0.8*inch, 0.7*inch, 1.5*inch]
+        total_min = sum(min_widths)
+
+        if total_min > available_width:
+            # Scale down proportionally
+            scale = available_width / total_min
+            col_widths = [w * scale for w in min_widths]
+        else:
+            # Distribute extra space proportionally to content needs
+            extra = available_width - total_min
+            total_content = sum(col_max_lengths)
+            if total_content > 0:
+                col_widths = [
+                    min_widths[i] + (extra * col_max_lengths[i] / total_content)
+                    for i in range(5)
+                ]
+            else:
+                col_widths = min_widths
+
+        # Convert to Paragraph objects for wrapping
+        wrapped_data = []
+        for row_idx, row in enumerate(doc_data):
+            wrapped_row = []
+            for col_idx, cell_text in enumerate(row):
+                if row_idx == 0:
+                    # Header row
+                    wrapped_row.append(Paragraph(str(cell_text), cell_style_bold))
+                else:
+                    wrapped_row.append(Paragraph(str(cell_text), cell_style))
+            wrapped_data.append(wrapped_row)
+
+        table = Table(wrapped_data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), header_color),
+            ('TEXTCOLOR', (0, 0), (-1, 0), HexColor('#ffffff')),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), 0.5, HexColor('#e2e8f0')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#ffffff'), HexColor('#f8fafc')]),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            # Allow row height to expand for wrapped text
+            ('WORDWRAP', (0, 0), (-1, -1), True),
+        ]))
+        story.append(table)
+
+    # ========================================================
+    # DOCUMENTS PRIOR TO DISBURSAL
+    # ========================================================
+    prior_docs = result.get("documents_prior_to_disbursal", [])
+    create_document_table(prior_docs, "📋 Documents Prior to Disbursal", HexColor('#4f46e5'))
+
+    # ========================================================
+    # DOCUMENTS POST DISBURSAL
+    # ========================================================
+    post_docs = result.get("documents_post_disbursal", [])
+    if post_docs:
+        story.append(Spacer(1, 0.15*inch))
+        create_document_table(post_docs, "📋 Documents Post Disbursal", HexColor('#06b6d4'))
+
+    # Footer
+    story.append(Spacer(1, 0.3*inch))
+    processing_time = result.get('processing_time_seconds', 0) or 0
+    filename = result.get('filename', 'Unknown')
+    story.append(Paragraph(f"Generated: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Processing Time: {processing_time:.1f}s | Source: {filename}",
+                          ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=HexColor('#94a3b8'), alignment=TA_CENTER)))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.read()
+
+
+def get_pdf_download_link(pdf_bytes: bytes, filename: str) -> str:
+    """Generate a download link for PDF."""
+    b64 = base64.b64encode(pdf_bytes).decode()
+    return f'<a href="data:application/pdf;base64,{b64}" download="{filename}.pdf" class="download-btn">📥 Download PDF Report</a>'
+
 
 # ============================================================
 # MAIN CONTENT AREA
@@ -405,6 +831,23 @@ if page == "Document Extraction":
         result = st.session_state["extraction_result"]
         fields = result.get("extracted_fields", {})
         processing_time = result.get("processing_time_seconds")
+        filename = result.get("filename", "Unknown")
+
+        # ========================================================
+        # NON-TRANSLATABLE FIELDS NOTICE
+        # ========================================================
+        st.markdown(
+            """<div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px;">
+                <div style="display: flex; align-items: center; gap: 10px; color: #92400e; font-weight: 600; font-size: 14px;">
+                    <span>ℹ️</span>
+                    <span>Note: The following fields are NOT translated to Tamil (dates, IDs, numbers):</span>
+                </div>
+                <div style="margin-top: 8px; color: #b45309; font-size: 13px;">
+                    <strong>LSR Date</strong> &nbsp;•&nbsp; <strong>Application Number</strong>
+                </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
 
         st.markdown('<div class="section-title">Extracted Information</div>', unsafe_allow_html=True)
         st.markdown('<div class="section-subtitle">Information identified from the uploaded document</div>', unsafe_allow_html=True)

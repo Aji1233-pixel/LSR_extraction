@@ -364,14 +364,25 @@ DOCUMENT TEXT
         )
 
         # --------------------------------------------------------
-        # Ollama
+        # Ollama (with retry logic for empty responses)
         # --------------------------------------------------------
 
         start = time.perf_counter()
 
-        response = self.ollama.generate(
-            prompt
-        )
+        max_retries = 3
+        response = None
+
+        for attempt in range(max_retries):
+            response = self.ollama.generate(prompt)
+            if response and response.strip():
+                break
+            print(f"⚠️ LLM returned empty response (attempt {attempt + 1}/{max_retries}), retrying...")
+            time.sleep(1)
+
+        if not response or not response.strip():
+            raise RuntimeError(
+                f"LLM returned empty response after {max_retries} attempts."
+            )
 
         llm_time = (
             time.perf_counter()

@@ -78,19 +78,31 @@ class FieldExtractor:
 
         except Exception as exc:
 
-            print(
-                f"❌ Field extraction LLM failed: "
-                f"{exc}"
-            )
-
-            raise RuntimeError(
-                f"Field extraction failed: {exc}"
-            ) from exc
-
-        llm_time = (
-            time.perf_counter()
-            - llm_start
+        print(
+            f"📝 Prompt characters: {len(prompt)}"
         )
+
+        # -------------------------------
+        # Ollama (with retry logic for empty responses)
+        # -------------------------------
+
+        ollama_start = time.perf_counter()
+
+        max_retries = 3
+        response = None
+
+        for attempt in range(max_retries):
+            response = self.ollama.generate(prompt)
+            if response and response.strip():
+                break
+            print(f"⚠️ LLM returned empty response (attempt {attempt + 1}/{max_retries}), retrying...")
+            time.sleep(1)
+
+        if not response or not response.strip():
+            print("⚠️ LLM failed after retries, using fallback regex extraction...")
+            return self._fallback_extraction(text)
+
+        ollama_time = time.perf_counter() - ollama_start
 
         print(
             f"⏱️ LLM extraction: "

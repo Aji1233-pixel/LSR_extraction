@@ -127,10 +127,25 @@ class FreeLLMClient:
                 - start_time
             )
 
-            print(
-                f"⏱️ FreeLLM API response: "
-                f"{elapsed:.2f} seconds"
-            )
+                print(
+                    f"⏱️ FreeLLM API response: "
+                    f"{elapsed:.2f} seconds"
+                )
+
+                print(
+                    f"HTTP status: {response.status_code}"
+                )
+
+                # Handle rate limiting with retry
+                if response.status_code == 429:
+                    wait_time = (attempt + 1) * 2  # 2s, 4s, 6s
+                    print(f"⚠️ Rate limited (429). Waiting {wait_time}s before retry (attempt {attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                    continue
+
+                response.raise_for_status()
+
+                data = response.json()
 
             # ====================================================
             # VALIDATE RESPONSE
