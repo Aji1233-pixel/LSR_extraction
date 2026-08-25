@@ -105,7 +105,7 @@ class FieldExtractor:
         )
 
         # -------------------------------
-        # Ollama (with retry logic for empty responses)
+        # Ollama (with retry logic for empty responses and LLM failures)
         # -------------------------------
 
         ollama_start = time.perf_counter()
@@ -114,11 +114,19 @@ class FieldExtractor:
         response = None
 
         for attempt in range(max_retries):
-            response = self.ollama.generate(prompt)
-            if response and response.strip():
-                break
-            print(f"⚠️ LLM returned empty response (attempt {attempt + 1}/{max_retries}), retrying...")
-            time.sleep(1)
+            try:
+                response = self.ollama.generate(prompt)
+                if response and response.strip():
+                    break
+                print(f"⚠️ LLM returned empty response (attempt {attempt + 1}/{max_retries}), retrying...")
+            except RuntimeError as exc:
+                print(f"⚠️ LLM runtime error (attempt {attempt + 1}/{max_retries}): {exc}")
+                if attempt == max_retries - 1:
+                    print("⚠️ LLM failed after retries, using fallback regex extraction...")
+                    return self._fallback_extraction(text)
+            # Exponential backoff: 2s, 4s, 8s...
+            wait_time = min(2 ** (attempt + 1), 30)
+            time.sleep(wait_time)
 
         if not response or not response.strip():
             print("⚠️ LLM failed after retries, using fallback regex extraction...")

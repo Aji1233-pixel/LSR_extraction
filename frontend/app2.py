@@ -34,28 +34,47 @@ st.set_page_config(
 )
 
 # ============================================================
-# CUSTOM CSS - PREMIUM UI
+# ROYAL PREMIUM TECH AI COLOR PALETTE & UI STYLING
+# Background: Deep Imperial Space Navy (#050811 / #0A1128)
+# Accents: Electric Gold (#FFD700 / #D4AF37), Tech Cloud Blue (#38BDF8)
+# Text & Containers: Soft Cloud White (#F8FAFC), Translucent Obsidian Glass
 # ============================================================
 
 CUSTOM_CSS = """
 <style>
-/* ---------- Global ---------- */
-.stApp {
-    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+/* ---------- Alpine Lake Natural Theme ---------- */
+html, body, [data-testid="stAppViewContainer"] {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
 }
+
+.stApp {
+    background: linear-gradient(180deg, #0A192F 0%, #06111E 50%, #030810 100%) !important;
+    background-attachment: fixed !important;
+    color: #F0F9FF !important;
+}
+
+[data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+    background: transparent !important;
+}
+
 .main .block-container {
-    max-width: 1300px;
+    max-width: 1280px;
     padding-top: 1.5rem;
     padding-bottom: 3rem;
 }
 
-/* ---------- Top Navigation Bar ---------- */
+/* ---------- Top Navigation Glass Header ---------- */
 .top-nav {
-    background: #ffffff;
-    border-radius: 18px;
-    padding: 16px 28px;
-    margin-bottom: 24px;
-    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+    background: rgba(10, 25, 47, 0.85) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(14, 165, 169, 0.3) !important;
+    border-radius: 20px;
+    padding: 16px 32px;
+    margin-bottom: 32px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -63,208 +82,272 @@ CUSTOM_CSS = """
 .top-nav-brand {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
 }
 .top-nav-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 13px;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
-    color: white;
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #0EA5A9 0%, #0D9488 100%);
+    color: #FFFFFF;
     font-size: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.25);
+    box-shadow: 0 0 20px rgba(14, 165, 169, 0.4);
+    font-weight: 800;
 }
 .top-nav-title {
-    font-size: 19px;
+    font-size: 22px;
     font-weight: 800;
-    color: #1e293b;
+    color: #FFFFFF;
     letter-spacing: -0.3px;
 }
 .top-nav-subtitle {
-    color: #94a3b8;
+    color: #2DD4BF;
     font-size: 12px;
-    margin-top: 1px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
 }
 .top-nav-links {
     display: flex;
-    gap: 8px;
+    gap: 12px;
 }
 .top-nav-link {
-    padding: 8px 16px;
-    border-radius: 10px;
-    background: #f1f5f9;
-    color: #64748b;
+    padding: 10px 20px;
+    border-radius: 12px;
+    background: rgba(15, 32, 59, 0.6);
+    color: #94A3B8;
     font-size: 13px;
     font-weight: 600;
     text-decoration: none;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .top-nav-link:hover {
-    background: #e2e8f0;
-    color: #334155;
+    background: rgba(14, 165, 169, 0.15);
+    color: #2DD4BF;
+    border-color: rgba(45, 212, 191, 0.4);
 }
 .top-nav-link.active {
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
-    color: white;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+    background: linear-gradient(135deg, #14B8A6 0%, #0F766E 100%);
+    color: #FFFFFF;
+    font-weight: 700;
+    box-shadow: 0 4px 20px rgba(20, 184, 166, 0.35);
 }
 
-/* ---------- Hero ---------- */
+/* ---------- AI Hero Interface Card ---------- */
 .hero {
-    background: linear-gradient(135deg, #eef2ff 0%, #ffffff 50%, #ecfeff 100%);
-    border: 1px solid #e0e7ff;
-    border-radius: 24px;
-    padding: 36px 40px;
-    margin-bottom: 28px;
-    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.03);
+    position: relative;
+    background: radial-gradient(100% 100% at 80% 20%, rgba(14, 165, 169, 0.25) 0%, rgba(10, 25, 47, 0.9) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(45, 212, 191, 0.3);
+    border-radius: 28px;
+    padding: 44px 48px;
+    margin-bottom: 36px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    overflow: hidden;
 }
 .hero-badge {
-    display: inline-block;
-    background: #e0e7ff;
-    color: #4338ca;
-    padding: 6px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(45, 212, 191, 0.12);
+    color: #2DD4BF;
+    border: 1px solid rgba(45, 212, 191, 0.35);
+    padding: 6px 16px;
     border-radius: 999px;
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.5px;
-    margin-bottom: 16px;
+    letter-spacing: 1.2px;
+    margin-bottom: 18px;
+    text-transform: uppercase;
 }
 .hero-title {
-    font-size: 34px;
+    font-size: 38px;
     line-height: 1.2;
     font-weight: 800;
-    color: #1e293b;
+    color: #FFFFFF;
     margin: 0;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.8px;
 }
 .hero-title span {
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
+    background: linear-gradient(135deg, #CCFBF1 0%, #2DD4BF 50%, #0EA5A9 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 .hero-description {
-    color: #64748b;
-    font-size: 15px;
+    color: #CBD5E1;
+    font-size: 16px;
     line-height: 1.7;
-    max-width: 720px;
-    margin-top: 14px;
+    max-width: 780px;
+    margin-top: 16px;
+    font-weight: 400;
 }
 
-/* ---------- Typography & Sections ---------- */
+/* ---------- Typography & Section Headers ---------- */
 .section-title {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
-    color: #1e293b;
-    margin-top: 32px;
-    margin-bottom: 4px;
+    color: #FFFFFF;
+    margin-top: 36px;
+    margin-bottom: 6px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    letter-spacing: -0.3px;
 }
 .section-title::before {
     content: '';
     width: 4px;
-    height: 22px;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
+    height: 24px;
+    background: linear-gradient(180deg, #2DD4BF 0%, #0F766E 100%);
     border-radius: 4px;
+    box-shadow: 0 0 10px rgba(45, 212, 191, 0.4);
 }
 .section-subtitle {
-    color: #94a3b8;
+    color: #94A3B8;
     font-size: 13px;
-    margin-bottom: 20px;
-    margin-left: 14px;
+    margin-bottom: 24px;
+    margin-left: 16px;
+    font-weight: 400;
 }
 
-/* ---------- Upload Area ---------- */
+/* ---------- CALM ICE-TURQUOISE FILE UPLOADER (SOLID BLACK TEXT) ---------- */
 div[data-testid="stFileUploader"] {
-    background: white;
-    border: 2px dashed #c7d2fe;
-    border-radius: 18px;
-    padding: 12px;
-    transition: all 0.2s ease;
-}
-div[data-testid="stFileUploader"]:hover {
-    border-color: #6366f1;
-    background: #fafaff;
+    background: rgba(204, 251, 241, 0.95) !important;
+    border: 2px dashed #0D9488 !important;
+    border-radius: 20px !important;
+    padding: 28px !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* ---------- Buttons ---------- */
+div[data-testid="stFileUploader"]:hover {
+    border-color: #0F766E !important;
+    background: rgba(240, 253, 250, 0.98) !important;
+    box-shadow: 0 12px 35px rgba(13, 148, 136, 0.25) !important;
+}
+
+/* FORCE ALL UPLOADER TEXT TO PURE BLACK */
+div[data-testid="stFileUploader"] *,
+div[data-testid="stFileUploader"] span, 
+div[data-testid="stFileUploader"] label,
+div[data-testid="stFileUploader"] p,
+div[data-testid="stFileUploader"] div,
+div[data-testid="stFileUploader"] small {
+    color: #000000 !important;
+    font-weight: 700 !important;
+}
+
+/* "Browse files" Button with high contrast */
+div[data-testid="stFileUploader"] button {
+    background: #0D9488 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #0F766E !important;
+    border-radius: 12px !important;
+    padding: 8px 22px !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    transition: all 0.25s ease !important;
+    box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3) !important;
+}
+
+div[data-testid="stFileUploader"] button * {
+    color: #FFFFFF !important;
+}
+
+div[data-testid="stFileUploader"] button:hover {
+    background: #0F766E !important;
+    border-color: #115E59 !important;
+    box-shadow: 0 6px 16px rgba(15, 118, 110, 0.4) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ---------- Action Button ---------- */
 .stButton > button {
     width: 100%;
-    border-radius: 12px;
-    min-height: 50px;
+    border-radius: 16px;
+    min-height: 56px;
     border: none;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
-    color: white;
-    font-weight: 700;
-    font-size: 15px;
-    box-shadow: 0 6px 18px rgba(79, 70, 229, 0.22);
-    transition: all 0.2s ease;
+    background: linear-gradient(135deg, #14B8A6 0%, #0D9488 50%, #0F766E 100%);
+    color: #FFFFFF;
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: 0.3px;
+    box-shadow: 0 8px 25px -5px rgba(20, 184, 166, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .stButton > button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 26px rgba(79, 70, 229, 0.3);
+    box-shadow: 0 12px 32px 0 rgba(20, 184, 166, 0.6);
+    background: linear-gradient(135deg, #2DD4BF 0%, #14B8A6 50%, #0D9488 100%);
+    color: #FFFFFF;
 }
 
-/* ---------- Cards ---------- */
+/* ---------- Structured Glass File Card ---------- */
 .file-card {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 18px;
-    margin: 18px 0;
+    background: rgba(15, 32, 59, 0.85);
+    border: 1px solid rgba(45, 212, 191, 0.3);
+    border-radius: 20px;
+    padding: 20px 28px;
+    margin: 20px 0;
     display: flex;
     align-items: center;
-    gap: 15px;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+    gap: 18px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 .file-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    background: #eef2ff;
-    color: #4f46e5;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: rgba(45, 212, 191, 0.15);
+    color: #2DD4BF;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 23px;
+    font-size: 24px;
+    border: 1px solid rgba(45, 212, 191, 0.4);
 }
 .file-name {
     font-weight: 700;
-    color: #1e293b;
-    font-size: 14px;
+    color: #FFFFFF;
+    font-size: 16px;
 }
 .file-info {
-    color: #94a3b8;
-    font-size: 12px;
-    margin-top: 3px;
+    color: #94A3B8;
+    font-size: 13px;
+    margin-top: 4px;
 }
 
-/* ---------- Bilingual Cards ---------- */
+/* ---------- High-Contrast Bilingual Cards ---------- */
 .bilingual-card {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 20px;
-    min-height: 135px;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
-    margin-bottom: 16px;
-    transition: all 0.2s ease;
+    background: rgba(10, 25, 47, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 24px;
+    min-height: 140px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
 }
 .bilingual-card:hover {
-    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
-    border-color: #c7d2fe;
+    border-color: rgba(45, 212, 191, 0.5);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6);
+    transform: translateY(-2px);
 }
 .bilingual-label {
-    color: #64748b;
-    font-size: 11px;
-    font-weight: 700;
+    color: #2DD4BF;
+    font-size: 12px;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
-    margin-bottom: 14px;
+    letter-spacing: 1.2px;
+    margin-bottom: 16px;
 }
 .bilingual-row {
     display: flex;
@@ -274,53 +357,52 @@ div[data-testid="stFileUploader"]:hover {
 .bilingual-col {
     flex: 1;
     min-width: 0;
-    padding: 0 16px;
+    padding: 0 18px;
 }
 .bilingual-col:first-child {
     padding-left: 0;
-    border-right: 1px solid #f1f5f9;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 .bilingual-col:last-child {
     padding-right: 0;
 }
 .bilingual-col-title {
-    color: #94a3b8;
-    font-size: 10px;
+    color: #94A3B8;
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.8px;
     margin-bottom: 8px;
 }
 .bilingual-value {
-    color: #1e293b;
+    color: #F0F9FF;
     font-size: 15px;
     font-weight: 600;
     line-height: 1.6;
     word-break: break-word;
-    user-select: text;
-    cursor: text;
 }
 .bilingual-value.tamil {
-    color: #059669;
+    color: #34D399;
     font-weight: 500;
 }
 .bilingual-value.empty {
-    color: #cbd5e1;
+    color: #64748B;
     font-weight: 400;
     font-style: italic;
 }
 
-/* ---------- Property Description Bilingual ---------- */
+/* ---------- Property Description Card ---------- */
 .property-bilingual {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 18px;
-    padding: 26px;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
-    transition: all 0.2s ease;
+    background: rgba(10, 25, 47, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 22px;
+    padding: 30px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    transition: all 0.3s ease;
 }
 .property-bilingual:hover {
-    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+    border-color: rgba(45, 212, 191, 0.5);
 }
 .property-bilingual-row {
     display: flex;
@@ -334,176 +416,119 @@ div[data-testid="stFileUploader"]:hover {
 }
 .property-bilingual-col:first-child {
     padding-left: 0;
-    border-right: 2px solid #f1f5f9;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 .property-bilingual-col:last-child {
     padding-right: 0;
 }
 .property-bilingual-title {
-    color: #94a3b8;
-    font-size: 11px;
-    font-weight: 700;
+    color: #2DD4BF;
+    font-size: 12px;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 14px;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
     padding-bottom: 10px;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .property-bilingual-text {
-    color: #1e293b;
-    font-size: 14px;
-    line-height: 1.9;
+    color: #F0F9FF;
+    font-size: 15px;
+    line-height: 1.8;
     word-break: break-word;
     white-space: pre-wrap;
-    user-select: text;
-    cursor: text;
 }
 .property-bilingual-text.tamil {
-    color: #059669;
+    color: #34D399;
 }
 .property-bilingual-text.empty {
-    color: #cbd5e1;
+    color: #64748B;
     font-weight: 400;
     font-style: italic;
 }
 
-/* ---------- Document Tables ---------- */
-.doc-table-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 12px;
-    margin-top: 22px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.doc-table-title::before {
-    content: '';
-    width: 3px;
-    height: 16px;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
-    border-radius: 3px;
-}
-.stDataFrame {
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    overflow: hidden;
-}
-
-/* ---------- Metrics ---------- */
+/* ---------- Stat Metrics ---------- */
 .metric-card {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 20px;
+    background: rgba(10, 25, 47, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 24px;
     text-align: center;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
-    transition: all 0.2s ease;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
 }
 .metric-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+    border-color: rgba(45, 212, 191, 0.4);
 }
 .metric-number {
-    font-size: 26px;
+    font-size: 32px;
     font-weight: 800;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
+    background: linear-gradient(135deg, #CCFBF1 0%, #2DD4BF 50%, #0EA5A9 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 .metric-label {
-    color: #94a3b8;
+    color: #94A3B8;
     font-size: 12px;
     margin-top: 6px;
-    font-weight: 600;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
 }
 
-/* ---------- Footer ---------- */
+/* ---------- Tables & Native Components ---------- */
+.doc-table-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 16px;
+    margin-top: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.doc-table-title::before {
+    content: '';
+    width: 3px;
+    height: 18px;
+    background: #2DD4BF;
+    border-radius: 3px;
+}
+.stDataFrame {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    overflow: hidden;
+    background: rgba(10, 25, 47, 0.7);
+}
+
+button[data-baseweb="tab"] {
+    color: #94A3B8 !important;
+    background-color: transparent !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    padding: 12px 20px !important;
+}
+button[aria-selected="true"] {
+    color: #2DD4BF !important;
+    border-bottom-color: #2DD4BF !important;
+}
+
 .footer {
     text-align: center;
-    color: #94a3b8;
-    font-size: 12px;
-    padding: 36px 0 12px 0;
-}
-
-/* ---------- Processing Spinner ---------- */
-.processing-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(248, 250, 252, 0.85);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-}
-.processing-card {
-    background: white;
-    border-radius: 24px;
-    padding: 40px 50px;
-    text-align: center;
-    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.1);
-    max-width: 380px;
-}
-.processing-spinner {
-    width: 56px;
-    height: 56px;
-    border: 4px solid #e0e7ff;
-    border-top-color: #4f46e5;
-    border-radius: 50%;
-    margin: 0 auto 20px;
-    animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-.processing-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 8px;
-}
-.processing-step {
-    color: #64748b;
+    color: #64748B;
     font-size: 13px;
-    line-height: 1.6;
-}
-.processing-step-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 6px 0;
-    color: #94a3b8;
-    font-size: 13px;
-    transition: color 0.3s ease;
-}
-.processing-step-item.active {
-    color: #4f46e5;
-    font-weight: 600;
-}
-.processing-step-icon {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: #e0e7ff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    color: white;
-}
-.processing-step-icon.active {
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
+    padding: 48px 0 20px 0;
+    font-weight: 500;
 }
 </style>
 """
 
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-
 # ============================================================
-# TOP NAVIGATION (replaces sidebar)
+# TOP NAVIGATION
 # ============================================================
 
 st.markdown(
@@ -512,12 +537,12 @@ st.markdown(
             <div class="top-nav-icon">📄</div>
             <div>
                 <div class="top-nav-title">LSR Intelligence</div>
-                <div class="top-nav-subtitle">Document Extraction System</div>
+                <div class="top-nav-subtitle">Next-Gen Document Extraction AI</div>
             </div>
         </div>
         <div class="top-nav-links">
             <a href="#" class="top-nav-link active">Document Extraction</a>
-            <a href="#" class="top-nav-link">About</a>
+            <a href="#" class="top-nav-link">About System</a>
         </div>
     </div>""",
     unsafe_allow_html=True,
@@ -615,21 +640,12 @@ def render_doc_table(documents, title):
 
 
 def reorder_property_description(text: str) -> str:
-    """
-    Reorder property description to show address first, then boundaries/extent.
-
-    Expected input format contains:
-    - Address/location info
-    - Survey/khewat/khatoni details
-    - Extent/measurements
-    - Boundaries (North, South, East, West)
-    """
+    """Reorder property description to show address first, then boundaries/extent."""
     if not text:
         return text
 
     lines = text.strip().split('\n')
 
-    # Categories for reordering
     address_lines = []
     survey_lines = []
     extent_lines = []
@@ -640,7 +656,6 @@ def reorder_property_description(text: str) -> str:
     extent_keywords = ['measuring', 'extent', 'area', 'sq.ft', 'sq ft', 'acre', 'hectare', 'cent', 'ground']
     survey_keywords = ['survey', 'khewat', 'khatoni', 'khata', 'plot no', 'plot number', 'door no', 'door number']
     address_keywords = ['situated', 'located', 'at ', 'address', 'road', 'street', 'village', 'town', 'city', 'district', 'pincode', 'pin code', 'chennai', 'main road']
-    # Keep headers like "Bounded by:" with the boundary section
     header_keywords = ['bounded by', 'boundaries:', 'boundary:']
 
     for line in lines:
@@ -663,11 +678,10 @@ def reorder_property_description(text: str) -> str:
         elif is_address:
             address_lines.append(line)
         elif is_header:
-            boundary_lines.insert(0, line)  # Put header at start of boundaries
+            boundary_lines.insert(0, line)
         else:
             other_lines.append(line)
 
-    # Reorder: Address -> Survey -> Extent -> Boundaries -> Other
     reordered = []
     reordered.extend(address_lines)
     reordered.extend(survey_lines)
@@ -704,7 +718,6 @@ def generate_pdf_report(result: dict) -> bytes:
 
     styles = getSampleStyleSheet()
 
-    # Custom styles
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
@@ -758,7 +771,6 @@ def generate_pdf_report(result: dict) -> bytes:
         leading=15
     )
 
-    # Tamil font name (falls back to Helvetica if Nirmala unavailable)
     tamil_font_name = 'Nirmala' if TAMIL_FONT_AVAILABLE else 'Helvetica'
 
     tamil_value_style = ParagraphStyle(
@@ -781,7 +793,6 @@ def generate_pdf_report(result: dict) -> bytes:
         leading=15
     )
 
-    # Table cell style for wrapping
     cell_style = ParagraphStyle(
         'CellStyle',
         parent=styles['Normal'],
@@ -805,28 +816,21 @@ def generate_pdf_report(result: dict) -> bytes:
 
     story = []
 
-    # Title
     story.append(Paragraph("LSR Document Intelligence", title_style))
     story.append(Paragraph("Extracted Information Report", subtitle_style))
     story.append(Spacer(1, 0.2*inch))
 
-    # Metadata
     fields = result.get("extracted_fields", {})
     translated_fields = result.get("translated_fields", {})
     processing_time = result.get("processing_time_seconds")
     filename = result.get("filename", "Unknown")
 
-    # Note: Removed the non-translatable fields notice (yellow box) as requested
-
-    # Non-translatable fields (dates, IDs, numbers) - skip Tamil line
     NO_TRANSLATE_FIELDS_PDF = {"lsr_date", "application_number"}
 
-    # Helper to add bilingual field
     def add_bilingual_field(label, eng_value, tam_value, field_name=None):
         story.append(Paragraph(label, field_label_style))
         if eng_value and str(eng_value).strip() not in ["Not found", "—", "None", ""]:
             story.append(Paragraph(f"English: {eng_value}", field_value_style))
-            # Only show Tamil if: (1) it exists and (2) field is translatable and (3) Tamil differs from English
             if (tam_value and str(tam_value).strip() not in ["—", "None", ""] and
                 (field_name is None or field_name not in NO_TRANSLATE_FIELDS_PDF) and
                 tam_value != eng_value):
@@ -835,9 +839,6 @@ def generate_pdf_report(result: dict) -> bytes:
             story.append(Paragraph("Not found", empty_style))
         story.append(Spacer(1, 0.05*inch))
 
-    # ========================================================
-    # BASIC INFORMATION
-    # ========================================================
     story.append(Paragraph("📋 Basic Information", section_style))
 
     basic_fields = [
@@ -856,9 +857,6 @@ def generate_pdf_report(result: dict) -> bytes:
             value = ", ".join(str(item) for item in value)
         add_bilingual_field(label, value, tamil_value, field_name)
 
-    # ========================================================
-    # PROPERTY DESCRIPTION (Reordered)
-    # ========================================================
     story.append(Paragraph("🏠 Property Description", section_style))
 
     property_description = fields.get("property_description")
@@ -875,21 +873,15 @@ def generate_pdf_report(result: dict) -> bytes:
     else:
         story.append(Paragraph("Not found", empty_style))
 
-    # ========================================================
-    # HELPER: Create dynamic document table
-    # ========================================================
     def create_document_table(documents, title, header_color):
-        """Create a document table with dynamic column widths and proper text wrapping."""
         if not documents:
             return None
 
         story.append(Paragraph(title, section_style))
 
-        # Prepare data with Paragraph objects for text wrapping
         headers = ["Deed Name", "Doc No.", "Date", "Mode", "Additional Details"]
         doc_data = [headers]
 
-        # Calculate max content length for each column to determine widths
         col_max_lengths = [len(h) for h in headers]
 
         for doc in documents:
@@ -904,19 +896,14 @@ def generate_pdf_report(result: dict) -> bytes:
                 col_max_lengths[i] = max(col_max_lengths[i], len(cell))
             doc_data.append(row)
 
-        # Calculate dynamic column widths based on content
-        # Available width = page width - margins = 595 - 54 - 54 = 487 points ≈ 6.76 inches
         available_width = 6.5 * inch
-        # Base widths proportional to max content, with minimums
         min_widths = [1.2*inch, 0.8*inch, 0.8*inch, 0.7*inch, 1.5*inch]
         total_min = sum(min_widths)
 
         if total_min > available_width:
-            # Scale down proportionally
             scale = available_width / total_min
             col_widths = [w * scale for w in min_widths]
         else:
-            # Distribute extra space proportionally to content needs
             extra = available_width - total_min
             total_content = sum(col_max_lengths)
             if total_content > 0:
@@ -927,13 +914,11 @@ def generate_pdf_report(result: dict) -> bytes:
             else:
                 col_widths = min_widths
 
-        # Convert to Paragraph objects for wrapping
         wrapped_data = []
         for row_idx, row in enumerate(doc_data):
             wrapped_row = []
             for col_idx, cell_text in enumerate(row):
                 if row_idx == 0:
-                    # Header row
                     wrapped_row.append(Paragraph(str(cell_text), cell_style_bold))
                 else:
                     wrapped_row.append(Paragraph(str(cell_text), cell_style))
@@ -953,26 +938,18 @@ def generate_pdf_report(result: dict) -> bytes:
             ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
             ('LEFTPADDING', (0, 0), (-1, -1), 6),
             ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-            # Allow row height to expand for wrapped text
             ('WORDWRAP', (0, 0), (-1, -1), True),
         ]))
         story.append(table)
 
-    # ========================================================
-    # DOCUMENTS PRIOR TO DISBURSAL
-    # ========================================================
     prior_docs = result.get("documents_prior_to_disbursal", [])
-    create_document_table(prior_docs, "📋 Documents Prior to Disbursal", HexColor('#4f46e5'))
+    create_document_table(prior_docs, "📋 Documents Prior to Disbursal", HexColor('#1e293b'))
 
-    # ========================================================
-    # DOCUMENTS POST DISBURSAL
-    # ========================================================
     post_docs = result.get("documents_post_disbursal", [])
     if post_docs:
         story.append(Spacer(1, 0.15*inch))
-        create_document_table(post_docs, "📋 Documents Post Disbursal", HexColor('#06b6d4'))
+        create_document_table(post_docs, "📋 Documents Post Disbursal", HexColor('#0284c7'))
 
-    # Footer
     story.append(Spacer(1, 0.3*inch))
     processing_time = result.get('processing_time_seconds', 0) or 0
     filename = result.get('filename', 'Unknown')
@@ -994,29 +971,25 @@ def get_pdf_download_link(pdf_bytes: bytes, filename: str) -> str:
 # MAIN CONTENT AREA
 # ============================================================
 
-# Page state in session
 if "current_page" not in st.session_state:
     st.session_state["current_page"] = "Document Extraction"
 
-# Track processing state
 if "is_processing" not in st.session_state:
     st.session_state["is_processing"] = False
 
 if st.session_state["current_page"] == "Document Extraction":
     st.markdown(
         """<div class="hero">
-            <div class="hero-badge">AI-POWERED DOCUMENT ANALYSIS</div>
-            <div class="hero-title">Extract LSR information <span>automatically.</span></div>
+            <div class="hero-badge">⚡ NEXT-GEN INTELLIGENCE ENGINE</div>
+            <div class="hero-title">Automated LSR Data <span>Extraction System.</span></div>
             <div class="hero-description">
-                Upload a legal property document and let our document intelligence pipeline
-                extract important information automatically using OCR and FreeLLMAPI.
+                Transform complex legal property reports into structured bilingual data. Powered by DocTR character recognition and neural language parsing.
             </div>
         </div>""",
         unsafe_allow_html=True,
     )
 
-    # File Upload Header
-    st.markdown('<div class="section-title">Upload Document</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Upload Legal Document</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-subtitle">Supported formats: PDF, JPG, JPEG, PNG, TIFF</div>', unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader(
@@ -1036,15 +1009,14 @@ if st.session_state["current_page"] == "Document Extraction":
                 <div class="file-icon">📄</div>
                 <div>
                     <div class="file-name">{uploaded_file.name}</div>
-                    <div class="file-info">{extension} &nbsp;•&nbsp; {file_size_kb:.1f} KB</div>
+                    <div class="file-info">{extension} Document &nbsp;•&nbsp; {file_size_kb:.1f} KB</div>
                 </div>
             </div>""",
             unsafe_allow_html=True,
         )
 
-        extract_clicked = st.button("✨ Extract Information", use_container_width=True, key="extract_btn")
+        extract_clicked = st.button("✨ Execute AI Extraction", use_container_width=True, key="extract_btn")
 
-    # Handle extraction when button is clicked
     if extract_clicked and uploaded_file:
         st.session_state["is_processing"] = True
         st.session_state["pending_file"] = {
@@ -1054,22 +1026,20 @@ if st.session_state["current_page"] == "Document Extraction":
         }
         st.rerun()
 
-    # Process the file if marked for processing
     if st.session_state.get("is_processing", False) and "pending_file" in st.session_state:
         pending_file = st.session_state["pending_file"]
 
-        # Progress tracking
         progress_bar = st.progress(0)
         status_text = st.empty()
 
         try:
             import time as _time
 
-            status_text.text("🔍 Step 1/3: Reading document...")
+            status_text.text("🔍 Step 1/3: Ingesting file payload...")
             progress_bar.progress(10)
             _time.sleep(0.5)
 
-            status_text.text("📄 Step 2/3: Extracting text with DocTR OCR...")
+            status_text.text("📄 Step 2/3: Executing OCR matrix scan...")
             progress_bar.progress(30)
 
             response = requests.post(
@@ -1084,7 +1054,7 @@ if st.session_state["current_page"] == "Document Extraction":
                 timeout=600,
             )
 
-            status_text.text("🧠 Step 3/3: Analyzing with AI & translating...")
+            status_text.text("🧠 Step 3/3: Running LLM entity parsing & translation...")
             progress_bar.progress(90)
 
             if response.status_code == 200:
@@ -1093,7 +1063,7 @@ if st.session_state["current_page"] == "Document Extraction":
                 del st.session_state["pending_file"]
                 progress_bar.progress(100)
                 status_text.text("")
-                st.success("Document processed successfully!")
+                st.success("Analysis Complete!")
                 st.rerun()
             else:
                 st.session_state["is_processing"] = False
@@ -1111,13 +1081,13 @@ if st.session_state["current_page"] == "Document Extraction":
             del st.session_state["pending_file"]
             progress_bar.progress(0)
             status_text.text("")
-            st.error("Unable to connect to the FastAPI server. Make sure the backend is running.")
+            st.error("Unable to connect to backend server. Verify API service status.")
         except requests.exceptions.Timeout:
             st.session_state["is_processing"] = False
             del st.session_state["pending_file"]
             progress_bar.progress(0)
             status_text.text("")
-            st.error("The document processing took too long. Please try again.")
+            st.error("Processing request timed out. Please try again.")
         except Exception as exc:
             st.session_state["is_processing"] = False
             del st.session_state["pending_file"]
@@ -1125,7 +1095,6 @@ if st.session_state["current_page"] == "Document Extraction":
             status_text.text("")
             st.error(f"Unexpected error: {exc}")
 
-    # Display Results
     if "extraction_result" in st.session_state and not st.session_state.get("is_processing", False):
         result = st.session_state["extraction_result"]
         fields = result.get("extracted_fields", {})
@@ -1133,12 +1102,9 @@ if st.session_state["current_page"] == "Document Extraction":
         processing_time = result.get("processing_time_seconds")
         filename = result.get("filename", "Unknown")
 
-        # Note: Non-translatable fields yellow box removed as requested
+        st.markdown('<div class="section-title">Extracted Intelligence</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-subtitle">Selectable English and Tamil structured output fields</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="section-title">Extracted Information</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-subtitle">Information identified from the uploaded document (English | Tamil) — text is selectable for copying</div>', unsafe_allow_html=True)
-
-        # Metrics
         metric1, metric2, metric3 = st.columns(3)
 
         found_count = sum(1 for value in fields.values() if value not in [None, "", [], {}])
@@ -1147,7 +1113,7 @@ if st.session_state["current_page"] == "Document Extraction":
             st.markdown(
                 f"""<div class="metric-card">
                     <div class="metric-number">{found_count}</div>
-                    <div class="metric-label">Fields Extracted</div>
+                    <div class="metric-label">Fields Identified</div>
                 </div>""",
                 unsafe_allow_html=True,
             )
@@ -1156,7 +1122,7 @@ if st.session_state["current_page"] == "Document Extraction":
             st.markdown(
                 f"""<div class="metric-card">
                     <div class="metric-number">{len(fields)}</div>
-                    <div class="metric-label">Required Fields</div>
+                    <div class="metric-label">Target Schema</div>
                 </div>""",
                 unsafe_allow_html=True,
             )
@@ -1166,17 +1132,14 @@ if st.session_state["current_page"] == "Document Extraction":
             st.markdown(
                 f"""<div class="metric-card">
                     <div class="metric-number">{time_display}</div>
-                    <div class="metric-label">Processing Time</div>
+                    <div class="metric-label">Execution Time</div>
                 </div>""",
                 unsafe_allow_html=True,
             )
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # ========================================================
-        # BASIC INFORMATION - Side by Side English/Tamil
-        # ========================================================
-        st.markdown("### 📋 Basic Information")
+        st.markdown("### 📋 Primary Attributes")
 
         basic_fields = [
             ("lsr_date", "LSR Date"),
@@ -1205,19 +1168,14 @@ if st.session_state["current_page"] == "Document Extraction":
                 else:
                     col2.markdown(card_html, unsafe_allow_html=True)
 
-        # ========================================================
-        # PROPERTY DESCRIPTION - Reordered (Address → Survey → Extent → Boundaries)
-        # ========================================================
-        st.markdown("### 🏠 Property Description")
+        st.markdown("### 🏠 Legal Property Boundaries & Description")
         property_description = fields.get("property_description")
         property_tamil = translated_fields.get("property_description")
 
-        # Reorder property description for better readability
         if property_description:
             reordered_eng = reorder_property_description(property_description)
             reordered_tam = reorder_property_description(property_tamil) if property_tamil else ""
 
-            # Custom render for reordered property description
             st.markdown(
                 f"""
                 <div class="property-bilingual">
@@ -1241,22 +1199,16 @@ if st.session_state["current_page"] == "Document Extraction":
                 unsafe_allow_html=True,
             )
 
-        # ========================================================
-        # PDF DOWNLOAD BUTTON (using Streamlit's built-in download_button)
-        # ========================================================
         pdf_filename = f"LSR_Report_{Path(filename).stem}_{__import__('datetime').datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-        # Generate PDF on demand when download is clicked
-        # We use a callback pattern to generate fresh PDF each time
         def generate_pdf_for_download():
             return generate_pdf_report(result)
 
-        # Generate PDF now for the download button
         pdf_bytes = generate_pdf_report(result)
 
-        st.markdown("<div style='text-align: center; margin: 32px 0 16px 0;'>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align: center; margin: 36px 0 20px 0;'>", unsafe_allow_html=True)
         st.download_button(
-            label="📥 Download PDF Report",
+            label="📥 Export PDF Analysis Report",
             data=pdf_bytes,
             file_name=f"{pdf_filename}.pdf",
             mime="application/pdf",
@@ -1265,12 +1217,8 @@ if st.session_state["current_page"] == "Document Extraction":
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # ========================================================
-        # DOCUMENT TABLES
-        # ========================================================
-
-        st.markdown('<div class="section-title">📑 Documents</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-subtitle">Documents identified from the uploaded LSR document</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">📑 Associated Documents</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-subtitle">Catalog of disbursal documentation mapped from scan</div>', unsafe_allow_html=True)
 
         prior_docs = result.get("documents_prior_to_disbursal", [])
         post_docs = result.get("documents_post_disbursal", [])
@@ -1286,29 +1234,23 @@ if st.session_state["current_page"] == "Document Extraction":
         with tab_post:
             render_doc_table(post_docs, "Documents Post Disbursal")
 
-        # Raw JSON Section
-        with st.expander("🔍 View Raw Extraction JSON"):
+        with st.expander("🔍 Inspection & Developer JSON Output"):
             st.json(result)
 
-        # Footer
         st.markdown(
             """<div class="footer">
-                LSR Document Intelligence &nbsp;•&nbsp; DocTR + FreeLLMAPI
+                LSR Intelligence Hub &nbsp;•&nbsp; Enterprise OCR & AI Platform
             </div>""",
             unsafe_allow_html=True,
         )
 
-# ============================================================
-# ABOUT PAGE (hidden by default, accessible via nav)
-# ============================================================
 elif st.session_state["current_page"] == "About":
     st.markdown(
         """<div class="hero">
-            <div class="hero-badge">ABOUT THE SYSTEM</div>
-            <div class="hero-title">LSR Document <span>Intelligence</span></div>
+            <div class="hero-badge">ARCHITECTURAL OVERVIEW</div>
+            <div class="hero-title">LSR Document <span>Intelligence Hub</span></div>
             <div class="hero-description">
-                An AI-powered document information extraction system designed to automatically
-                identify important information from legal property reports.
+                High-performance document processing pipeline optimized for parsing legal titles and property documentation.
             </div>
         </div>""",
         unsafe_allow_html=True,
@@ -1317,27 +1259,23 @@ elif st.session_state["current_page"] == "About":
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown("### 🔍 DocTR\nOptical Character Recognition extracts text from uploaded documents.")
+        st.markdown("### 🔍 DocTR OCR Engine\nPerforms character recognition and spatial block text extraction.")
 
     with col2:
-        st.markdown("### 🧠 FreeLLMAPI\nA cloud LLM gateway identifies the predefined fields from the extracted text.")
+        st.markdown("### 🧠 LLM Neural Gateway\nExtracts target schema fields and renders language translations.")
 
     with col3:
-        st.markdown("### ⚡ FastAPI\nThe backend coordinates document processing and returns structured data.")
+        st.markdown("### ⚡ Fast API Core\nAsynchronous REST backend handling data verification and PDF rendering.")
 
     st.markdown("---")
-    st.markdown("### 📌 Extracted Fields")
+    st.markdown("### 📌 Schematized Output Fields")
     st.write(
         """
-        The system currently extracts:
-        - LSR Date
-        - Company Name
-        - Applicant Name
-        - Co-Applicant Name
-        - Property Owner
-        - Application Number
-        - Property Description (with boundaries and extent)
-        - Documents Prior to Disbursal (table with Deed Name, Doc No., Date, Mode)
-        - Documents Post Disbursal (table with Deed Name, Doc No., Date, Mode)
+        - LSR Date & Company Name
+        - Applicant & Co-Applicant Info
+        - Property Ownership Details
+        - Unique Application Numbers
+        - Property Description & Boundaries
+        - Prior/Post Disbursal Documentation Schedules
         """
     )

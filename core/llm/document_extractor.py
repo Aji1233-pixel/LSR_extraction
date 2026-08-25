@@ -554,7 +554,7 @@ DOCUMENT TEXT:
         )
 
         # --------------------------------------------------------
-        # Ollama (with retry logic for empty responses)
+        # Ollama (with retry logic for empty responses and LLM failures)
         # --------------------------------------------------------
 
         start = time.perf_counter()
@@ -563,16 +563,29 @@ DOCUMENT TEXT:
         response = None
 
         for attempt in range(max_retries):
-            response = self.ollama.generate(prompt)
-            if response and response.strip():
-                break
-            print(f"⚠️ LLM returned empty response (attempt {attempt + 1}/{max_retries}), retrying...")
-            time.sleep(1)
+            try:
+                response = self.ollama.generate(prompt)
+                if response and response.strip():
+                    break
+                print(f"⚠️ LLM returned empty response (attempt {attempt + 1}/{max_retries}), retrying...")
+            except RuntimeError as exc:
+                print(f"⚠️ LLM runtime error (attempt {attempt + 1}/{max_retries}): {exc}")
+                if attempt == max_retries - 1:
+                    print("⚠️ LLM failed after retries, returning empty document lists...")
+                    return {
+                        "documents_prior_to_disbursal": [],
+                        "documents_post_disbursal": []
+                    }
+            # Exponential backoff: 2s, 4s, 8s...
+            wait_time = min(2 ** (attempt + 1), 30)
+            time.sleep(wait_time)
 
         if not response or not response.strip():
-            raise RuntimeError(
-                f"LLM returned empty response after {max_retries} attempts."
-            )
+            print("⚠️ LLM failed after retries, returning empty document lists...")
+            return {
+                "documents_prior_to_disbursal": [],
+                "documents_post_disbursal": []
+            }
 
         llm_time = (
             time.perf_counter()
