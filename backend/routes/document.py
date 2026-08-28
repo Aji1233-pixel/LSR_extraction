@@ -26,19 +26,22 @@ router = APIRouter(
 # LOAD COMPONENTS ONCE WHEN BACKEND STARTS
 # ============================================================
 
+# ============================================================
+# LOAD COMPONENTS ONCE WHEN BACKEND STARTS
+# ============================================================
+
 doctr_engine = DocTREngine()
 
 freellm_client = FreeLLMClient()
 
 field_extractor = FieldExtractor(freellm_client)
 
-document_extractor = DocumentExtractor(
-    freellm_client
-)
+document_extractor = DocumentExtractor(freellm_client)
 
 validator = DocumentValidator()
 
-tamil_translator = TamilTranslator()
+# Pass the LLM client directly to TamilTranslator
+tamil_translator = TamilTranslator(freellm_client=freellm_client)
 
 @router.post("/extract")
 def extract_document(file: UploadFile):
