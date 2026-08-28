@@ -1,8 +1,7 @@
 from fastapi import APIRouter, HTTPException, UploadFile
 import time
-import concurrent.futures
-import traceback
 import logging
+import traceback
 
 from core.extraction.doctr_engine import DocTREngine
 from core.llm.freellm_client import FreeLLMClient
@@ -11,10 +10,19 @@ from core.llm.document_extractor import DocumentExtractor
 from core.validation.validator import DocumentValidator
 from core.translation.translator import TamilTranslator
 
-# Configure logging
+
+# ============================================================
+# LOGGING
+# ============================================================
+
 logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
+
+# ============================================================
+# ROUTER
+# ============================================================
 
 router = APIRouter(
     prefix="/api",
@@ -27,24 +35,58 @@ router = APIRouter(
 # ============================================================
 
 # ============================================================
-# LOAD COMPONENTS ONCE WHEN BACKEND STARTS
+# INITIALIZE COMPONENTS ONCE
 # ============================================================
+
+print("\n" + "=" * 60)
+print("INITIALIZING LSR DOCUMENT EXTRACTION SYSTEM")
+print("=" * 60)
+
+
+# ------------------------------------------------------------
+# OCR
+# ------------------------------------------------------------
 
 doctr_engine = DocTREngine()
 
+
+# ------------------------------------------------------------
+# Shared FreeLLM client
+# ------------------------------------------------------------
+
 freellm_client = FreeLLMClient()
 
-field_extractor = FieldExtractor(freellm_client)
 
-document_extractor = DocumentExtractor(freellm_client)
+# ------------------------------------------------------------
+# Basic field extraction
+# ------------------------------------------------------------
+
+field_extractor = FieldExtractor(
+    freellm_client
+)
+
+
+# ------------------------------------------------------------
+# Prior/Post disbursal document extraction
+# ------------------------------------------------------------
+
+document_extractor = DocumentExtractor(
+    freellm_client
+)
 
 validator = DocumentValidator()
 
-# Pass the LLM client directly to TamilTranslator
-tamil_translator = TamilTranslator(freellm_client=freellm_client)
+
+# ------------------------------------------------------------
+# Tamil translation
+# ------------------------------------------------------------
+
+tamil_translator = TamilTranslator()
 
 @router.post("/extract")
-def extract_document(file: UploadFile):
+def extract_document(
+    file: UploadFile,
+):
 
     total_start = time.perf_counter()
 
@@ -56,7 +98,7 @@ def extract_document(file: UploadFile):
     try:
 
         # ====================================================
-        # FILE READING
+        # 1. FILE READING
         # ====================================================
 
         file_start = time.perf_counter()
@@ -73,125 +115,326 @@ def extract_document(file: UploadFile):
             f"{file_time:.2f} seconds"
         )
 
+        # ----------------------------------------------------
+        # Empty file
+        # ----------------------------------------------------
+
         if not file_bytes:
 
             raise HTTPException(
                 status_code=400,
-                detail="Uploaded file is empty."
+                detail="Uploaded file is empty.",
             )
 
-        # Validate file size (max 20 MB)
-        MAX_FILE_SIZE = 20 * 1024 * 1024
-        if len(file_bytes) > MAX_FILE_SIZE:
+        # ----------------------------------------------------
+        # File information
+        # ----------------------------------------------------
+
+        print(
+            f"📄 Filename: "
+            f"{file.filename}"
+        )
+
+        print(
+            f"📦 File size: "
+            f"{len(file_bytes) / 1024:.2f} KB"
+        )
+
+        # ----------------------------------------------------
+        # File size validation
+        # ----------------------------------------------------
+
+        max_file_size = 20 * 1024 * 1024
+
+        if len(file_bytes) > max_file_size:
+
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "File too large. Maximum size is "
-                    f"{MAX_FILE_SIZE // (1024*1024)} MB."
+                    "File too large. "
+                    "Maximum size is 20 MB."
+                ),
+            )
+
+        # ====================================================
+        # 2. DOCTR OCR
+        # ====================================================
+
+        print("\n")
+        print("=" * 50)
+        print("🔍 DOCTR OCR STARTED")
+        print("=" * 50)
+
+        doctr_start = time.perf_counter()
+
+        try:
+
+            raw_text = (
+                doctr_engine.extract_text(
+                    file_bytes=file_bytes,
+                    filename=file.filename,
                 )
             )
 
-        # ====================================================
-        # DOCTR OCR
-        # ====================================================
-
-        try:
-            raw_text = doctr_engine.extract_text(
-                file_bytes=file_bytes,
-                filename=file.filename,
-            )
         except ValueError as exc:
-            # Unsupported file type etc.
-            logger.error(f"OCR validation error: {exc}")
+
+            logger.error(
+                f"OCR validation error: {exc}"
+            )
+
             raise HTTPException(
                 status_code=400,
                 detail=str(exc),
             ) from exc
+
         except RuntimeError as exc:
-            # OCR could not extract any text
+
             logger.error(
-                f"OCR extraction failed: {exc}\n"
+                f"OCR extraction failed: "
+                f"{exc}\n"
                 f"{traceback.format_exc()}"
             )
+
             raise HTTPException(
                 status_code=422,
                 detail=(
-                    "Could not extract text from document: "
-                    f"{exc}"
+                    "Could not extract text "
+                    f"from document: {exc}"
                 ),
             ) from exc
 
-        # ====================================================
-        # PARALLEL EXTRACTION (Fields + Documents)
-        # ====================================================
-
-        extract_start = time.perf_counter()
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            future_fields = executor.submit(field_extractor.extract_fields, raw_text)
-            future_docs = executor.submit(document_extractor.extract_documents, raw_text)
-
-            extracted_data = future_fields.result()
-            document_data = future_docs.result()
-
-        extract_time = time.perf_counter() - extract_start
+        doctr_time = (
+            time.perf_counter()
+            - doctr_start
+        )
 
         print(
-            f"Parallel extraction: "
-            f"{extract_time:.2f} seconds"
+            f"⏱️ DocTR OCR: "
+            f"{doctr_time:.2f} seconds"
         )
 
-        # DEBUG: Print extracted data
-        print(f"DEBUG extracted_data: {extracted_data}")
+        # ----------------------------------------------------
+        # Validate OCR output
+        # ----------------------------------------------------
 
-        # ====================================================
-        # VALIDATION
-        # ====================================================
+        if (
+            not raw_text
+            or not raw_text.strip()
+        ):
 
-        final_result = validator.validate(
-            extracted_data
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "No text could be extracted "
+                    "from the uploaded document."
+                ),
+            )
+
+        print(
+            f"📝 OCR characters: "
+            f"{len(raw_text)}"
+        )
+
+        print(
+            f"📝 OCR words: "
+            f"{len(raw_text.split())}"
         )
 
         # ====================================================
-        # TAMIL TRANSLATION (Skip dates, numbers, IDs)
+        # 3. BASIC FIELD EXTRACTION
         # ====================================================
 
-        translated_fields = {}
-        translation_start = time.perf_counter()
+        print("\n")
+        print("=" * 50)
+        print("📋 BASIC FIELD EXTRACTION")
+        print("=" * 50)
 
-        # Fields that should NOT be translated (dates, IDs, numbers)
-        NO_TRANSLATE_FIELDS = {
-            "lsr_date",
-            "application_number",
-        }
+        field_start = time.perf_counter()
 
         try:
-            for key, value in final_result.items():
-                if value and isinstance(value, str) and value.strip():
-                    # Skip translation for dates and numbers
-                    if key in NO_TRANSLATE_FIELDS:
-                        translated_fields[key] = value
-                    else:
-                        try:
-                            translated_fields[key] = tamil_translator.translate(value)
-                        except Exception as field_exc:
-                            # Per-field graceful failure: keep English value
-                            logger.warning(
-                                f"Translation failed for '{key}': {field_exc}"
-                            )
-                            translated_fields[key] = value
-                else:
-                    translated_fields[key] = None
-        except Exception as exc:
-            print(f"⚠️ Translation failed: {exc}")
-            # Fall back to English values rather than nulling everything
-            translated_fields = dict(final_result)
 
-        translation_time = time.perf_counter() - translation_start
-        print(f"⏱️ Tamil translation: {translation_time:.2f} seconds")
+            extracted_data = (
+                field_extractor.extract_fields(
+                    raw_text
+                )
+            )
+
+        except Exception as exc:
+
+            logger.error(
+                f"Field extraction failed: "
+                f"{exc}\n"
+                f"{traceback.format_exc()}"
+            )
+
+            raise RuntimeError(
+                f"Field extraction failed: {exc}"
+            ) from exc
+
+        field_time = (
+            time.perf_counter()
+            - field_start
+        )
+
+        print(
+            f"⏱️ Basic field extraction: "
+            f"{field_time:.2f} seconds"
+        )
 
         # ====================================================
-        # TOTAL PROCESSING TIME
+        # 4. VALIDATION
+        # ====================================================
+
+        print("\n")
+        print("=" * 50)
+        print("✅ VALIDATION")
+        print("=" * 50)
+
+        validation_start = time.perf_counter()
+
+        try:
+
+            final_result = (
+                validator.validate(
+                    extracted_data
+                )
+            )
+
+        except Exception as exc:
+
+            logger.error(
+                f"Validation failed: "
+                f"{exc}\n"
+                f"{traceback.format_exc()}"
+            )
+
+            raise RuntimeError(
+                f"Validation failed: {exc}"
+            ) from exc
+
+        validation_time = (
+            time.perf_counter()
+            - validation_start
+        )
+
+        print(
+            f"⏱️ Validation: "
+            f"{validation_time:.2f} seconds"
+        )
+
+        # ====================================================
+        # 5. TAMIL TRANSLATION
+        # ====================================================
+
+        print("\n")
+        print("=" * 50)
+        print("🌐 TAMIL TRANSLATION")
+        print("=" * 50)
+
+        translation_start = time.perf_counter()
+
+        translated_fields = (
+            translate_fields(
+                final_result
+            )
+        )
+
+        translation_time = (
+            time.perf_counter()
+            - translation_start
+        )
+
+        print(
+            f"⏱️ Tamil translation: "
+            f"{translation_time:.2f} seconds"
+        )
+
+        # ====================================================
+        # 6. DOCUMENT LIST EXTRACTION
+        # ====================================================
+
+        print("\n")
+        print("=" * 50)
+        print("📑 DOCUMENT LIST EXTRACTION")
+        print("=" * 50)
+
+        document_start = time.perf_counter()
+
+        try:
+
+            document_data = (
+                document_extractor.extract_documents(
+                    raw_text
+                )
+            )
+
+        except Exception as exc:
+
+            logger.error(
+                f"Document list extraction failed: "
+                f"{exc}\n"
+                f"{traceback.format_exc()}"
+            )
+
+            raise RuntimeError(
+                f"Document list extraction failed: "
+                f"{exc}"
+            ) from exc
+
+        document_time = (
+            time.perf_counter()
+            - document_start
+        )
+
+        print(
+            f"⏱️ Document extraction: "
+            f"{document_time:.2f} seconds"
+        )
+
+        # ====================================================
+        # 7. SAFE DOCUMENT RESULTS
+        # ====================================================
+
+        if not isinstance(
+            document_data,
+            dict,
+        ):
+
+            document_data = {
+                "documents_prior_to_disbursal": [],
+                "documents_post_disbursal": [],
+            }
+
+        prior_documents = (
+            document_data.get(
+                "documents_prior_to_disbursal",
+                [],
+            )
+        )
+
+        post_documents = (
+            document_data.get(
+                "documents_post_disbursal",
+                [],
+            )
+        )
+
+        if not isinstance(
+            prior_documents,
+            list,
+        ):
+
+            prior_documents = []
+
+        if not isinstance(
+            post_documents,
+            list,
+        ):
+
+            post_documents = []
+
+        # ====================================================
+        # 8. TOTAL PROCESSING TIME
         # ====================================================
 
         total_time = (
@@ -199,78 +442,172 @@ def extract_document(file: UploadFile):
             - total_start
         )
 
-        print("\n" + "=" * 50)
+        print("\n")
+        print("=" * 60)
 
         print(
             f"🏁 TOTAL REQUEST TIME: "
             f"{total_time:.2f} seconds"
         )
 
-        print("=" * 50 + "\n")
+        print(
+            f"🔍 OCR: "
+            f"{doctr_time:.2f}s"
+        )
+
+        print(
+            f"📋 Basic fields: "
+            f"{field_time:.2f}s"
+        )
+
+        print(
+            f"📑 Documents: "
+            f"{document_time:.2f}s"
+        )
+
+        print(
+            f"🌐 Translation: "
+            f"{translation_time:.2f}s"
+        )
+
+        print("=" * 60)
 
         # ====================================================
-        # FINAL RESPONSE
+        # 9. FINAL RESPONSE
         # ====================================================
 
-        return {
+        response_data = {
+
             "success": True,
 
             "filename": file.filename,
 
+            # ------------------------------------------------
+            # Basic information
+            # ------------------------------------------------
+
             "extracted_fields": final_result,
+
+            # ------------------------------------------------
+            # Tamil translation
+            # ------------------------------------------------
 
             "translated_fields": translated_fields,
 
+            # ------------------------------------------------
+            # Prior disbursal documents
+            # ------------------------------------------------
+
             "documents_prior_to_disbursal":
-                document_data[
-                    "documents_prior_to_disbursal"
-                ],
+                prior_documents,
+
+            # ------------------------------------------------
+            # Post disbursal documents
+            # ------------------------------------------------
 
             "documents_post_disbursal":
-                document_data[
-                    "documents_post_disbursal"
-                ],
+                post_documents,
+
+            # ------------------------------------------------
+            # Processing time
+            # ------------------------------------------------
 
             "processing_time_seconds": round(
                 total_time,
-                2
+                2,
             ),
         }
+
+        # ====================================================
+        # 10. RESPONSE SUMMARY
+        # ====================================================
+
+        print("\n")
+        print(
+            "========== FINAL API RESPONSE =========="
+        )
+
+        print(
+            f"📄 File: "
+            f"{file.filename}"
+        )
+
+        print(
+            f"📋 Fields: "
+            f"{len(final_result)}"
+        )
+
+        print(
+            f"📑 Prior documents: "
+            f"{len(prior_documents)}"
+        )
+
+        print(
+            f"📑 Post documents: "
+            f"{len(post_documents)}"
+        )
+
+        print(
+            f"⏱️ Total: "
+            f"{total_time:.2f}s"
+        )
+
+        print(
+            "========================================"
+        )
+
+        return response_data
+
+    # ========================================================
+    # HTTP EXCEPTION
+    # ========================================================
 
     except HTTPException:
         raise
 
-    except concurrent.futures.TimeoutError as exc:
-        logger.error(
-            f"Extraction timeout: {exc}\n{traceback.format_exc()}"
-        )
-        raise HTTPException(
-            status_code=504,
-            detail="Document processing timed out. Please try again.",
-        ) from exc
+    # ========================================================
+    # GENERAL EXCEPTION
+    # ========================================================
 
     except RuntimeError as exc:
-        # LLM failures, connection errors etc.
-        error_message = str(exc)
+
         logger.error(
             f"Runtime error during processing: "
-            f"{error_message}\n{traceback.format_exc()}"
+            f"{exc}\n"
+            f"{traceback.format_exc()}"
         )
 
-        lowered = error_message.lower()
+        error_message = str(exc).lower()
 
-        if "timed out" in lowered or "timeout" in lowered:
-            status_code = 504
-            detail = "AI service timed out. Please try again."
-        elif "connect" in lowered:
+        if (
+            "connect" in error_message
+            or "connection" in error_message
+        ):
+
             status_code = 503
+
             detail = (
-                "AI service is unavailable. Please make sure "
-                "the LLM service is running."
+                "AI service is unavailable. "
+                "Please check the FreeLLM service."
             )
+
+        elif (
+            "timeout" in error_message
+            or "timed out" in error_message
+        ):
+
+            status_code = 504
+
+            detail = (
+                "AI service timed out. "
+                "Please try again."
+            )
+
         else:
+
             status_code = 502
-            detail = f"AI processing failed: {error_message}"
+
+            detail = str(exc)
 
         raise HTTPException(
             status_code=status_code,
@@ -280,13 +617,15 @@ def extract_document(file: UploadFile):
     except Exception as exc:
 
         logger.error(
-            f"Unexpected processing failure: {exc}\n"
+            f"Unexpected processing failure: "
+            f"{exc}\n"
             f"{traceback.format_exc()}"
         )
 
         raise HTTPException(
             status_code=500,
             detail=(
-                f"Document processing failed: {exc}"
+                f"Document processing failed: "
+                f"{exc}"
             ),
         ) from exc

@@ -1,17 +1,19 @@
-import sys
 from pathlib import Path
+from io import BytesIO
+import html
+import textwrap
+
 import requests
 import streamlit as st
-import base64
-from io import BytesIO
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.colors import HexColor
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.enums import TA_CENTER
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 
 # Ensure UTF-8 output so emoji/log messages don't crash
 # on Windows consoles that default to cp1252.
@@ -33,200 +35,159 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+
 # ============================================================
-# CUSTOM CSS - PREMIUM UI
+# HELPER FUNCTIONS
 # ============================================================
 
 CUSTOM_CSS = """
 <style>
 /* ---------- Global ---------- */
 .stApp {
-    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+    background: #f5f8fc;
 }
 .main .block-container {
-    max-width: 1300px;
-    padding-top: 1.5rem;
+    max-width: 1250px;
+    padding-top: 2rem;
     padding-bottom: 3rem;
 }
 
-/* ---------- Top Navigation Bar ---------- */
-.top-nav {
+/* ---------- Sidebar ---------- */
+section[data-testid="stSidebar"] {
     background: #ffffff;
-    border-radius: 18px;
-    padding: 16px 28px;
-    margin-bottom: 24px;
-    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    border-right: 1px solid #e5eaf0;
 }
-.top-nav-brand {
-    display: flex;
-    align-items: center;
-    gap: 14px;
+section[data-testid="stSidebar"] > div {
+    padding-top: 2rem;
 }
-.top-nav-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 13px;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
+.sidebar-logo {
+    text-align: center;
+    padding: 10px 0 25px 0;
+}
+.sidebar-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #2563eb, #0ea5e9);
     color: white;
-    font-size: 22px;
+    font-size: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.25);
+    margin: auto;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.20);
 }
-.top-nav-title {
-    font-size: 19px;
-    font-weight: 800;
-    color: #1e293b;
-    letter-spacing: -0.3px;
+.sidebar-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #172033;
+    margin-top: 12px;
 }
-.top-nav-subtitle {
-    color: #94a3b8;
+.sidebar-subtitle {
+    color: #7b8798;
     font-size: 12px;
-    margin-top: 1px;
-}
-.top-nav-links {
-    display: flex;
-    gap: 8px;
-}
-.top-nav-link {
-    padding: 8px 16px;
-    border-radius: 10px;
-    background: #f1f5f9;
-    color: #64748b;
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.2s ease;
-}
-.top-nav-link:hover {
-    background: #e2e8f0;
-    color: #334155;
-}
-.top-nav-link.active {
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
-    color: white;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+    margin-top: 4px;
 }
 
 /* ---------- Hero ---------- */
 .hero {
-    background: linear-gradient(135deg, #eef2ff 0%, #ffffff 50%, #ecfeff 100%);
-    border: 1px solid #e0e7ff;
+    background: linear-gradient(135deg, #eff6ff 0%, #ffffff 55%, #ecfeff 100%);
+    border: 1px solid #dbeafe;
     border-radius: 24px;
-    padding: 36px 40px;
-    margin-bottom: 28px;
-    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.03);
+    padding: 38px 42px;
+    margin-bottom: 25px;
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04);
 }
 .hero-badge {
     display: inline-block;
-    background: #e0e7ff;
-    color: #4338ca;
-    padding: 6px 14px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    padding: 6px 12px;
     border-radius: 999px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.5px;
-    margin-bottom: 16px;
+    margin-bottom: 15px;
 }
 .hero-title {
-    font-size: 34px;
-    line-height: 1.2;
+    font-size: 38px;
+    line-height: 1.15;
     font-weight: 800;
-    color: #1e293b;
+    color: #172033;
     margin: 0;
-    letter-spacing: -0.5px;
 }
 .hero-title span {
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #2563eb;
 }
 .hero-description {
     color: #64748b;
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.7;
-    max-width: 720px;
+    max-width: 760px;
     margin-top: 14px;
 }
 
 /* ---------- Typography & Sections ---------- */
 .section-title {
-    font-size: 20px;
-    font-weight: 700;
-    color: #1e293b;
-    margin-top: 32px;
-    margin-bottom: 4px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.section-title::before {
-    content: '';
-    width: 4px;
-    height: 22px;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
-    border-radius: 4px;
+    font-size: 22px;
+    font-weight: 750;
+    color: #172033;
+    margin-top: 28px;
+    margin-bottom: 5px;
 }
 .section-subtitle {
-    color: #94a3b8;
-    font-size: 13px;
-    margin-bottom: 20px;
-    margin-left: 14px;
+    color: #7b8798;
+    font-size: 14px;
+    margin-bottom: 18px;
 }
 
 /* ---------- Upload Area ---------- */
 div[data-testid="stFileUploader"] {
     background: white;
-    border: 2px dashed #c7d2fe;
+    border: 2px dashed #bfdbfe;
     border-radius: 18px;
-    padding: 12px;
-    transition: all 0.2s ease;
+    padding: 10px;
 }
 div[data-testid="stFileUploader"]:hover {
-    border-color: #6366f1;
-    background: #fafaff;
+    border-color: #60a5fa;
+    background: #fafdff;
 }
 
 /* ---------- Buttons ---------- */
 .stButton > button {
     width: 100%;
     border-radius: 12px;
-    min-height: 50px;
+    min-height: 48px;
     border: none;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
+    background: linear-gradient(135deg, #2563eb, #0ea5e9);
     color: white;
     font-weight: 700;
     font-size: 15px;
-    box-shadow: 0 6px 18px rgba(79, 70, 229, 0.22);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.20);
     transition: all 0.2s ease;
 }
 .stButton > button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 26px rgba(79, 70, 229, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
 }
 
 /* ---------- Cards ---------- */
 .file-card {
     background: white;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #e5eaf0;
     border-radius: 16px;
     padding: 18px;
-    margin: 18px 0;
+    margin: 15px 0;
     display: flex;
     align-items: center;
     gap: 15px;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.03);
 }
 .file-icon {
     width: 48px;
     height: 48px;
     border-radius: 12px;
-    background: #eef2ff;
-    color: #4f46e5;
+    background: #eff6ff;
+    color: #2563eb;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -234,7 +195,7 @@ div[data-testid="stFileUploader"]:hover {
 }
 .file-name {
     font-weight: 700;
-    color: #1e293b;
+    color: #172033;
     font-size: 14px;
 }
 .file-info {
@@ -243,258 +204,70 @@ div[data-testid="stFileUploader"]:hover {
     margin-top: 3px;
 }
 
-/* ---------- Bilingual Cards ---------- */
-.bilingual-card {
+.result-card {
     background: white;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #e5eaf0;
     border-radius: 16px;
     padding: 20px;
-    min-height: 135px;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
-    margin-bottom: 16px;
-    transition: all 0.2s ease;
+    min-height: 115px;
+    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.035);
+    margin-bottom: 15px;
 }
-.bilingual-card:hover {
-    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
-    border-color: #c7d2fe;
-}
-.bilingual-label {
-    color: #64748b;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    margin-bottom: 14px;
-}
-.bilingual-row {
-    display: flex;
-    gap: 0;
-    align-items: stretch;
-}
-.bilingual-col {
-    flex: 1;
-    min-width: 0;
-    padding: 0 16px;
-}
-.bilingual-col:first-child {
-    padding-left: 0;
-    border-right: 1px solid #f1f5f9;
-}
-.bilingual-col:last-child {
-    padding-right: 0;
-}
-.bilingual-col-title {
-    color: #94a3b8;
-    font-size: 10px;
-    font-weight: 700;
+.result-label {
+    color: #7b8798;
+    font-size: 12px;
+    font-weight: 650;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 8px;
 }
-.bilingual-value {
-    color: #1e293b;
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1.6;
+.result-value {
+    color: #172033;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.5;
     word-break: break-word;
-    user-select: text;
-    cursor: text;
 }
-.bilingual-value.tamil {
-    color: #059669;
-    font-weight: 500;
-}
-.bilingual-value.empty {
-    color: #cbd5e1;
-    font-weight: 400;
-    font-style: italic;
-}
-
-/* ---------- Property Description Bilingual ---------- */
-.property-bilingual {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 18px;
-    padding: 26px;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
-    transition: all 0.2s ease;
-}
-.property-bilingual:hover {
-    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
-}
-.property-bilingual-row {
-    display: flex;
-    gap: 0;
-    align-items: stretch;
-}
-.property-bilingual-col {
-    flex: 1;
-    min-width: 0;
-    padding: 0 24px;
-}
-.property-bilingual-col:first-child {
-    padding-left: 0;
-    border-right: 2px solid #f1f5f9;
-}
-.property-bilingual-col:last-child {
-    padding-right: 0;
-}
-.property-bilingual-title {
+.result-value.empty {
     color: #94a3b8;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 14px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #f1f5f9;
-}
-.property-bilingual-text {
-    color: #1e293b;
-    font-size: 14px;
-    line-height: 1.9;
-    word-break: break-word;
-    white-space: pre-wrap;
-    user-select: text;
-    cursor: text;
-}
-.property-bilingual-text.tamil {
-    color: #059669;
-}
-.property-bilingual-text.empty {
-    color: #cbd5e1;
-    font-weight: 400;
+    font-weight: 500;
     font-style: italic;
 }
 
-/* ---------- Document Tables ---------- */
-.doc-table-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 12px;
-    margin-top: 22px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.doc-table-title::before {
-    content: '';
-    width: 3px;
-    height: 16px;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
-    border-radius: 3px;
-}
-.stDataFrame {
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    overflow: hidden;
+.property-card {
+    background: white;
+    border: 1px solid #e5eaf0;
+    border-radius: 18px;
+    padding: 24px;
+    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.035);
+    line-height: 1.8;
+    color: #475569;
+    font-size: 14px;
 }
 
-/* ---------- Metrics ---------- */
 .metric-card {
     background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 20px;
+    border: 1px solid #e5eaf0;
+    border-radius: 15px;
+    padding: 18px;
     text-align: center;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
-    transition: all 0.2s ease;
-}
-.metric-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
 }
 .metric-number {
-    font-size: 26px;
+    font-size: 25px;
     font-weight: 800;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #2563eb;
 }
 .metric-label {
-    color: #94a3b8;
+    color: #7b8798;
     font-size: 12px;
-    margin-top: 6px;
-    font-weight: 600;
+    margin-top: 4px;
 }
 
-/* ---------- Footer ---------- */
 .footer {
     text-align: center;
     color: #94a3b8;
     font-size: 12px;
-    padding: 36px 0 12px 0;
-}
-
-/* ---------- Processing Spinner ---------- */
-.processing-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(248, 250, 252, 0.85);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-}
-.processing-card {
-    background: white;
-    border-radius: 24px;
-    padding: 40px 50px;
-    text-align: center;
-    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.1);
-    max-width: 380px;
-}
-.processing-spinner {
-    width: 56px;
-    height: 56px;
-    border: 4px solid #e0e7ff;
-    border-top-color: #4f46e5;
-    border-radius: 50%;
-    margin: 0 auto 20px;
-    animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-.processing-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 8px;
-}
-.processing-step {
-    color: #64748b;
-    font-size: 13px;
-    line-height: 1.6;
-}
-.processing-step-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 6px 0;
-    color: #94a3b8;
-    font-size: 13px;
-    transition: color 0.3s ease;
-}
-.processing-step-item.active {
-    color: #4f46e5;
-    font-weight: 600;
-}
-.processing-step-icon {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: #e0e7ff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    color: white;
-}
-.processing-step-icon.active {
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
+    padding: 30px 0 10px 0;
 }
 </style>
 """
@@ -503,25 +276,18 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
 # ============================================================
-# TOP NAVIGATION (replaces sidebar)
+# SIDEBAR
 # ============================================================
 
-st.markdown(
-    """<div class="top-nav">
-        <div class="top-nav-brand">
-            <div class="top-nav-icon">📄</div>
-            <div>
-                <div class="top-nav-title">LSR Intelligence</div>
-                <div class="top-nav-subtitle">Document Extraction System</div>
-            </div>
-        </div>
-        <div class="top-nav-links">
-            <a href="#" class="top-nav-link active">Document Extraction</a>
-            <a href="#" class="top-nav-link">About</a>
-        </div>
-    </div>""",
-    unsafe_allow_html=True,
-)
+with st.sidebar:
+    st.markdown(
+        """<div class="sidebar-logo">
+            <div class="sidebar-icon">📄</div>
+            <div class="sidebar-title">LSR Intelligence</div>
+            <div class="sidebar-subtitle">Document Extraction System</div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
 
 # ============================================================
@@ -678,18 +444,6 @@ def reorder_property_description(text: str) -> str:
     return '\n'.join(reordered) if reordered else text
 
 
-# ============================================================
-# TAMIL FONT REGISTRATION (Nirmala UI - Windows built-in)
-# ============================================================
-try:
-    pdfmetrics.registerFont(TTFont('Nirmala', r'C:\Windows\Fonts\Nirmala.ttc', subfontIndex=0))
-    pdfmetrics.registerFontFamily('Nirmala', normal='Nirmala', bold='Nirmala', italic='Nirmala', boldItalic='Nirmala')
-    TAMIL_FONT_AVAILABLE = True
-except Exception as e:
-    print(f"[WARN] Could not register Nirmala Tamil font: {e}")
-    TAMIL_FONT_AVAILABLE = False
-
-
 def generate_pdf_report(result: dict) -> bytes:
     """Generate a PDF report from extraction results with dynamic layout."""
     buffer = BytesIO()
@@ -758,16 +512,13 @@ def generate_pdf_report(result: dict) -> bytes:
         leading=15
     )
 
-    # Tamil font name (falls back to Helvetica if Nirmala unavailable)
-    tamil_font_name = 'Nirmala' if TAMIL_FONT_AVAILABLE else 'Helvetica'
-
     tamil_value_style = ParagraphStyle(
         'TamilValue',
         parent=styles['Normal'],
         fontSize=11,
         spaceAfter=8,
         textColor=HexColor('#059669'),
-        fontName=tamil_font_name,
+        fontName='Helvetica',
         leading=15
     )
 
@@ -816,20 +567,17 @@ def generate_pdf_report(result: dict) -> bytes:
     processing_time = result.get("processing_time_seconds")
     filename = result.get("filename", "Unknown")
 
-    # Note: Removed the non-translatable fields notice (yellow box) as requested
-
-    # Non-translatable fields (dates, IDs, numbers) - skip Tamil line
-    NO_TRANSLATE_FIELDS_PDF = {"lsr_date", "application_number"}
+    # Non-translatable fields notice
+    story.append(Paragraph("Note: The following fields are not translated (dates, IDs, numbers): LSR Date, Application Number",
+                          ParagraphStyle('Note', parent=styles['Normal'], fontSize=9, textColor=HexColor('#64748b'), fontName='Helvetica-Oblique')))
+    story.append(Spacer(1, 0.15*inch))
 
     # Helper to add bilingual field
-    def add_bilingual_field(label, eng_value, tam_value, field_name=None):
+    def add_bilingual_field(label, eng_value, tam_value):
         story.append(Paragraph(label, field_label_style))
         if eng_value and str(eng_value).strip() not in ["Not found", "—", "None", ""]:
             story.append(Paragraph(f"English: {eng_value}", field_value_style))
-            # Only show Tamil if: (1) it exists and (2) field is translatable and (3) Tamil differs from English
-            if (tam_value and str(tam_value).strip() not in ["—", "None", ""] and
-                (field_name is None or field_name not in NO_TRANSLATE_FIELDS_PDF) and
-                tam_value != eng_value):
+            if tam_value and str(tam_value).strip() not in ["—", "None", ""]:
                 story.append(Paragraph(f"தமிழ்: {tam_value}", tamil_value_style))
         else:
             story.append(Paragraph("Not found", empty_style))
@@ -854,7 +602,7 @@ def generate_pdf_report(result: dict) -> bytes:
         tamil_value = translated_fields.get(field_name)
         if isinstance(value, list):
             value = ", ".join(str(item) for item in value)
-        add_bilingual_field(label, value, tamil_value, field_name)
+        add_bilingual_field(label, value, tamil_value)
 
     # ========================================================
     # PROPERTY DESCRIPTION (Reordered)
@@ -994,22 +742,14 @@ def get_pdf_download_link(pdf_bytes: bytes, filename: str) -> str:
 # MAIN CONTENT AREA
 # ============================================================
 
-# Page state in session
-if "current_page" not in st.session_state:
-    st.session_state["current_page"] = "Document Extraction"
-
-# Track processing state
-if "is_processing" not in st.session_state:
-    st.session_state["is_processing"] = False
-
-if st.session_state["current_page"] == "Document Extraction":
+if page == "Document Extraction":
     st.markdown(
         """<div class="hero">
             <div class="hero-badge">AI-POWERED DOCUMENT ANALYSIS</div>
             <div class="hero-title">Extract LSR information <span>automatically.</span></div>
             <div class="hero-description">
                 Upload a legal property document and let our document intelligence pipeline
-                extract important information automatically using OCR and FreeLLMAPI.
+                extract important information automatically using OCR and a local language model.
             </div>
         </div>""",
         unsafe_allow_html=True,
@@ -1025,11 +765,20 @@ if st.session_state["current_page"] == "Document Extraction":
         label_visibility="collapsed",
     )
 
-    extract_clicked = False
-
     if uploaded_file:
-        file_size_kb = len(uploaded_file.getvalue()) / 1024
-        extension = Path(uploaded_file.name).suffix.upper().replace(".", "")
+
+        file_bytes = uploaded_file.getvalue()
+
+        file_size_kb = (
+            len(file_bytes) / 1024
+        )
+
+        extension = (
+            Path(uploaded_file.name)
+            .suffix
+            .upper()
+            .replace(".", "")
+        )
 
         st.markdown(
             f"""<div class="file-card">
@@ -1042,101 +791,66 @@ if st.session_state["current_page"] == "Document Extraction":
             unsafe_allow_html=True,
         )
 
-        extract_clicked = st.button("✨ Extract Information", use_container_width=True, key="extract_btn")
-
-    # Handle extraction when button is clicked
-    if extract_clicked and uploaded_file:
-        st.session_state["is_processing"] = True
-        st.session_state["pending_file"] = {
-            "name": uploaded_file.name,
-            "content": uploaded_file.getvalue(),
-            "type": uploaded_file.type,
-        }
-        st.rerun()
-
-    # Process the file if marked for processing
-    if st.session_state.get("is_processing", False) and "pending_file" in st.session_state:
-        pending_file = st.session_state["pending_file"]
-
-        # Progress tracking
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-
-        try:
-            import time as _time
-
-            status_text.text("🔍 Step 1/3: Reading document...")
-            progress_bar.progress(10)
-            _time.sleep(0.5)
-
-            status_text.text("📄 Step 2/3: Extracting text with DocTR OCR...")
-            progress_bar.progress(30)
-
-            response = requests.post(
-                API_URL,
-                files={
-                    "file": (
-                        pending_file["name"],
-                        pending_file["content"],
-                        pending_file["type"],
-                    )
-                },
-                timeout=600,
-            )
-
-            status_text.text("🧠 Step 3/3: Analyzing with AI & translating...")
-            progress_bar.progress(90)
-
-            if response.status_code == 200:
-                st.session_state["extraction_result"] = response.json()
-                st.session_state["is_processing"] = False
-                del st.session_state["pending_file"]
-                progress_bar.progress(100)
-                status_text.text("")
-                st.success("Document processed successfully!")
-                st.rerun()
-            else:
-                st.session_state["is_processing"] = False
-                del st.session_state["pending_file"]
-                progress_bar.progress(0)
-                status_text.text("")
+        if st.button("✨ Extract Information", use_container_width=True):
+            with st.spinner("Analyzing document with DocTR and AI..."):
                 try:
-                    error_message = response.json().get("detail", "Unknown server error.")
-                except Exception:
-                    error_message = response.text
-                st.error(f"Extraction failed: {error_message}")
+                    response = requests.post(
+                        API_URL,
+                        files={
+                            "file": (
+                                uploaded_file.name,
+                                uploaded_file.getvalue(),
+                                uploaded_file.type,
+                            )
+                        },
+                        timeout=600,
+                    )
 
-        except requests.exceptions.ConnectionError:
-            st.session_state["is_processing"] = False
-            del st.session_state["pending_file"]
-            progress_bar.progress(0)
-            status_text.text("")
-            st.error("Unable to connect to the FastAPI server. Make sure the backend is running.")
-        except requests.exceptions.Timeout:
-            st.session_state["is_processing"] = False
-            del st.session_state["pending_file"]
-            progress_bar.progress(0)
-            status_text.text("")
-            st.error("The document processing took too long. Please try again.")
-        except Exception as exc:
-            st.session_state["is_processing"] = False
-            del st.session_state["pending_file"]
-            progress_bar.progress(0)
-            status_text.text("")
-            st.error(f"Unexpected error: {exc}")
+                    if response.status_code == 200:
+                        st.session_state["extraction_result"] = response.json()
+                        st.success("Document processed successfully!")
+                    else:
+                        try:
+                            error_message = response.json().get("detail", "Unknown server error.")
+                        except Exception:
+                            error_message = response.text
+                        st.error(f"Extraction failed: {error_message}")
 
-    # Display Results
-    if "extraction_result" in st.session_state and not st.session_state.get("is_processing", False):
+                except requests.exceptions.ConnectionError:
+                    st.error("Unable to connect to the FastAPI server. Make sure the backend is running.")
+                except requests.exceptions.Timeout:
+                    st.error("The document processing took too long. Please try again.")
+                except Exception as exc:
+                    st.error(f"Unexpected error: {exc}")
+
+    # ========================================================
+    # RESULTS
+    # ========================================================
+
+    if "extraction_result" in st.session_state:
         result = st.session_state["extraction_result"]
         fields = result.get("extracted_fields", {})
-        translated_fields = result.get("translated_fields", {})
         processing_time = result.get("processing_time_seconds")
         filename = result.get("filename", "Unknown")
 
-        # Note: Non-translatable fields yellow box removed as requested
+        # ========================================================
+        # NON-TRANSLATABLE FIELDS NOTICE
+        # ========================================================
+        st.markdown(
+            """<div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px;">
+                <div style="display: flex; align-items: center; gap: 10px; color: #92400e; font-weight: 600; font-size: 14px;">
+                    <span>ℹ️</span>
+                    <span>Note: The following fields are NOT translated to Tamil (dates, IDs, numbers):</span>
+                </div>
+                <div style="margin-top: 8px; color: #b45309; font-size: 13px;">
+                    <strong>LSR Date</strong> &nbsp;•&nbsp; <strong>Application Number</strong>
+                </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
 
         st.markdown('<div class="section-title">Extracted Information</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-subtitle">Information identified from the uploaded document (English | Tamil) — text is selectable for copying</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-subtitle">Information identified from the uploaded document</div>', unsafe_allow_html=True)
 
         # Metrics
         metric1, metric2, metric3 = st.columns(3)
@@ -1173,18 +887,34 @@ if st.session_state["current_page"] == "Document Extraction":
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # ========================================================
-        # BASIC INFORMATION - Side by Side English/Tamil
-        # ========================================================
+        # Basic Information Section
         st.markdown("### 📋 Basic Information")
 
         basic_fields = [
-            ("lsr_date", "LSR Date"),
-            ("company_name", "Company Name"),
-            ("application_number", "Application Number"),
-            ("applicant_name", "Applicant Name"),
-            ("co_applicant_name", "Co-Applicant Name"),
-            ("property_owner", "Property Owner"),
+            (
+                "lsr_date",
+                "LSR Date",
+            ),
+            (
+                "company_name",
+                "Company Name",
+            ),
+            (
+                "application_number",
+                "Application Number",
+            ),
+            (
+                "applicant_name",
+                "Applicant Name",
+            ),
+            (
+                "co_applicant_name",
+                "Co-Applicant Name",
+            ),
+            (
+                "property_owner",
+                "Property Owner",
+            ),
         ]
 
         for row_start in range(0, len(basic_fields), 2):
@@ -1193,115 +923,181 @@ if st.session_state["current_page"] == "Document Extraction":
 
             for index, (field_name, label) in enumerate(row_fields):
                 value = fields.get(field_name)
-                tamil_value = translated_fields.get(field_name)
 
                 if isinstance(value, list):
                     value = ", ".join(str(item) for item in value)
 
-                card_html = render_bilingual_field(label, value, tamil_value)
+                if value in [None, "", [], {}]:
+                    display_value = "Not found"
+                    value_class = "result-value empty"
+                else:
+                    display_value = str(value)
+                    value_class = "result-value"
+
+                card_html = f"""<div class="result-card">
+                    <div class="result-label">{label}</div>
+                    <div class="{value_class}">{display_value}</div>
+                </div>"""
 
                 if index == 0:
                     col1.markdown(card_html, unsafe_allow_html=True)
                 else:
                     col2.markdown(card_html, unsafe_allow_html=True)
 
-        # ========================================================
-        # PROPERTY DESCRIPTION - Reordered (Address → Survey → Extent → Boundaries)
-        # ========================================================
+        # Property Description Section
         st.markdown("### 🏠 Property Description")
         property_description = fields.get("property_description")
-        property_tamil = translated_fields.get("property_description")
 
-        # Reorder property description for better readability
         if property_description:
-            reordered_eng = reorder_property_description(property_description)
-            reordered_tam = reorder_property_description(property_tamil) if property_tamil else ""
-
-            # Custom render for reordered property description
             st.markdown(
-                f"""
-                <div class="property-bilingual">
-                    <div class="property-bilingual-row">
-                        <div class="property-bilingual-col">
-                            <div class="property-bilingual-title">English</div>
-                            <div class="property-bilingual-text">{reordered_eng}</div>
-                        </div>
-                        <div class="property-bilingual-col">
-                            <div class="property-bilingual-title">தமிழ் (Tamil)</div>
-                            <div class="property-bilingual-text tamil">{reordered_tam if reordered_tam else '—'}</div>
-                        </div>
-                    </div>
-                </div>
-                """,
+                f"""<div class="property-card">{property_description}</div>""",
                 unsafe_allow_html=True,
             )
         else:
-            st.markdown(
-                render_property_bilingual(property_description, property_tamil),
-                unsafe_allow_html=True,
-            )
-
-        # ========================================================
-        # PDF DOWNLOAD BUTTON (using Streamlit's built-in download_button)
-        # ========================================================
-        pdf_filename = f"LSR_Report_{Path(filename).stem}_{__import__('datetime').datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-        # Generate PDF on demand when download is clicked
-        # We use a callback pattern to generate fresh PDF each time
-        def generate_pdf_for_download():
-            return generate_pdf_report(result)
-
-        # Generate PDF now for the download button
-        pdf_bytes = generate_pdf_report(result)
-
-        st.markdown("<div style='text-align: center; margin: 32px 0 16px 0;'>", unsafe_allow_html=True)
-        st.download_button(
-            label="📥 Download PDF Report",
-            data=pdf_bytes,
-            file_name=f"{pdf_filename}.pdf",
-            mime="application/pdf",
-            use_container_width=False,
-            type="primary",
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # ========================================================
-        # DOCUMENT TABLES
-        # ========================================================
-
-        st.markdown('<div class="section-title">📑 Documents</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-subtitle">Documents identified from the uploaded LSR document</div>', unsafe_allow_html=True)
-
-        prior_docs = result.get("documents_prior_to_disbursal", [])
-        post_docs = result.get("documents_post_disbursal", [])
-
-        tab_prior, tab_post = st.tabs([
-            "📋 Prior to Disbursal",
-            "📋 Post Disbursal",
-        ])
-
-        with tab_prior:
-            render_doc_table(prior_docs, "Documents Prior to Disbursal")
-
-        with tab_post:
-            render_doc_table(post_docs, "Documents Post Disbursal")
+            st.info("Property description was not found.")
 
         # Raw JSON Section
         with st.expander("🔍 View Raw Extraction JSON"):
-            st.json(result)
+            st.json(fields)
 
         # Footer
         st.markdown(
             """<div class="footer">
-                LSR Document Intelligence &nbsp;•&nbsp; DocTR + FreeLLMAPI
+                LSR Document Intelligence &nbsp;•&nbsp; DocTR + Ollama + Qwen
             </div>""",
             unsafe_allow_html=True,
         )
 
+        st.markdown(
+            '<div class="section-subtitle">'
+            'Documents required after disbursal'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        post_table = prepare_documents(
+            post_docs
+        )
+
+        if post_table:
+
+            st.dataframe(
+                post_table,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        else:
+
+            st.info(
+                "No documents post disbursal found."
+            )
+
+        # ====================================================
+        # REPORT GENERATION
+        # ====================================================
+
+        st.markdown(
+            '<div class="section-title">'
+            '📄 Report Generation'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            '<div class="section-subtitle">'
+            'Generate a PDF report containing the extracted information'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        report_col1, report_col2 = st.columns(
+            [3, 1]
+        )
+
+        with report_col1:
+
+            st.markdown(
+                """
+                <div class="file-card">
+
+                    <div style="font-size:30px;">
+                        📄
+                    </div>
+
+                    <div>
+
+                        <div class="file-name">
+                            LSR Extraction Report
+                        </div>
+
+                        <div class="file-info">
+                            Basic information • Property description
+                            • Required documents
+                        </div>
+
+                    </div>
+
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with report_col2:
+
+            pdf_bytes = generate_pdf(
+                result
+            )
+
+            filename = (
+                Path(
+                    result.get(
+                        "filename",
+                        "LSR_Report",
+                    )
+                ).stem
+                + "_Report.pdf"
+            )
+
+            st.download_button(
+                "📥 Generate PDF",
+                data=pdf_bytes,
+                file_name=filename,
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
+        # ====================================================
+        # RAW JSON
+        # ====================================================
+
+        with st.expander(
+            "🔍 View Raw Backend Response"
+        ):
+
+            st.json(result)
+
+        # ====================================================
+        # FOOTER
+        # ====================================================
+
+        st.markdown(
+            """
+            <div class="footer">
+                LSR Document Intelligence
+                &nbsp;•&nbsp;
+                DocTR + FreeLLM + FastAPI
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
 # ============================================================
-# ABOUT PAGE (hidden by default, accessible via nav)
+# ABOUT PAGE
 # ============================================================
-elif st.session_state["current_page"] == "About":
+
+else:
     st.markdown(
         """<div class="hero">
             <div class="hero-badge">ABOUT THE SYSTEM</div>
@@ -1320,7 +1116,7 @@ elif st.session_state["current_page"] == "About":
         st.markdown("### 🔍 DocTR\nOptical Character Recognition extracts text from uploaded documents.")
 
     with col2:
-        st.markdown("### 🧠 FreeLLMAPI\nA cloud LLM gateway identifies the predefined fields from the extracted text.")
+        st.markdown("### 🧠 Qwen 3B\nA local language model identifies the predefined fields from the extracted text.")
 
     with col3:
         st.markdown("### ⚡ FastAPI\nThe backend coordinates document processing and returns structured data.")
@@ -1336,8 +1132,6 @@ elif st.session_state["current_page"] == "About":
         - Co-Applicant Name
         - Property Owner
         - Application Number
-        - Property Description (with boundaries and extent)
-        - Documents Prior to Disbursal (table with Deed Name, Doc No., Date, Mode)
-        - Documents Post Disbursal (table with Deed Name, Doc No., Date, Mode)
+        - Property Description
         """
     )
