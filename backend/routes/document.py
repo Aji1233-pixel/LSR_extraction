@@ -31,6 +31,10 @@ router = APIRouter(
 
 
 # ============================================================
+# LOAD COMPONENTS ONCE WHEN BACKEND STARTS
+# ============================================================
+
+# ============================================================
 # INITIALIZE COMPONENTS ONCE
 # ============================================================
 
@@ -70,11 +74,6 @@ document_extractor = DocumentExtractor(
     freellm_client
 )
 
-
-# ------------------------------------------------------------
-# Validation
-# ------------------------------------------------------------
-
 validator = DocumentValidator()
 
 
@@ -83,128 +82,6 @@ validator = DocumentValidator()
 # ------------------------------------------------------------
 
 tamil_translator = TamilTranslator()
-
-
-print("✅ LSR extraction components initialized")
-print("=" * 60)
-print()
-
-
-# ============================================================
-# TRANSLATION HELPER
-# ============================================================
-
-def translate_fields(
-    fields: dict,
-) -> dict:
-    """
-    Translate extracted fields into Tamil.
-
-    Dates and application numbers are preserved.
-    If translation fails for a field, the original
-    English value is preserved.
-    """
-
-    translated_fields = {}
-
-    no_translate_fields = {
-        "lsr_date",
-        "application_number",
-    }
-
-    for key, value in fields.items():
-
-        # ----------------------------------------------------
-        # Missing value
-        # ----------------------------------------------------
-
-        if value is None:
-            translated_fields[key] = None
-            continue
-
-        if (
-            isinstance(value, str)
-            and not value.strip()
-        ):
-            translated_fields[key] = None
-            continue
-
-        # ----------------------------------------------------
-        # Dates / IDs
-        # ----------------------------------------------------
-
-        if key in no_translate_fields:
-            translated_fields[key] = value
-            continue
-
-        # ----------------------------------------------------
-        # Lists
-        # ----------------------------------------------------
-
-        if isinstance(value, list):
-
-            translated_values = []
-
-            for item in value:
-
-                if item is None:
-                    translated_values.append(None)
-                    continue
-
-                try:
-
-                    translated_values.append(
-                        tamil_translator.translate(
-                            str(item)
-                        )
-                    )
-
-                except Exception as exc:
-
-                    logger.warning(
-                        f"Translation failed "
-                        f"for '{key}': {exc}"
-                    )
-
-                    # Preserve original value
-                    translated_values.append(
-                        item
-                    )
-
-            translated_fields[key] = (
-                translated_values
-            )
-
-            continue
-
-        # ----------------------------------------------------
-        # Normal value
-        # ----------------------------------------------------
-
-        try:
-
-            translated_fields[key] = (
-                tamil_translator.translate(
-                    str(value)
-                )
-            )
-
-        except Exception as exc:
-
-            logger.warning(
-                f"Translation failed "
-                f"for '{key}': {exc}"
-            )
-
-            # Do not destroy English extraction
-            translated_fields[key] = value
-
-    return translated_fields
-
-
-# ============================================================
-# EXTRACT DOCUMENT
-# ============================================================
 
 @router.post("/extract")
 def extract_document(
